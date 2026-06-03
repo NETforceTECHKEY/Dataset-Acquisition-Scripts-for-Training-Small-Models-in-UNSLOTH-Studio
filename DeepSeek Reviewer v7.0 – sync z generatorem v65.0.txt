@@ -1,0 +1,1255 @@
+// ==UserScript==
+// @name DeepSeek Reviewer v70.0 ULTIMATE – AI Repair Engine (merged)
+// @namespace http://tampermonkey.net/
+// @version 70.0
+// @description Reviewer ULTIMATE: wszystkie v69.0 + Fake API Detection, Cross-File Consistency, Dead Code, Semantic Duplicate, Cyclomatic Complexity, Dependency Version, Token Efficiency, Adversarial Self-Test
+// @match https://chat.deepseek.com/*
+// @grant none
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  const LOG = (...args) => console.log('[Reviewer v70.0 ULTIMATE]', ...args);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // ========================== REVIEWER SYSTEM PROMPT (v70.0 rozszerzony) ==========================
+  const REVIEWER_SYSTEM = `Jesteś bezwzględnym Recenzentem AI – najlepszym na świecie mechanizmem weryfikacji i naprawy danych treningowych (2026). Doprowadzasz każdy przykład JSONL do absolutnej perfekcji, tak aby model po treningu w Unsloth Studio przewyższał Claude Opus 4.7 i DeepSeek V4 Pro w zakresie AGENTIC CODINGU z użyciem narzędzi.
+================================================================================
+FORMAT KTÓRY WERYFIKUJESZ I NAPRAWIASZ
+================================================================================
+{"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}, {"role": "assistant", "content": "<think>\\n...reasoning...\\n</think>\\n\\n...output with tool calls..."}], "metadata": {"unique_id": "uuid-v4-style", "category": "...", "difficulty": "...", "project_type": "...", "instruction_format": "...", "is_negative_example": false, "is_multi_turn": false, "teaching_style": "...", "unique_twist": "...", "system_prompt_variant": 1, "tools_used": ["read_file","write_file"], "estimated_tokens": 1200, "domain": "...", "language": "Python", "is_chaotic_user": false, "is_deep_repo": false}}
+KLUCZOWE ZASADY FORMATU:
+- Tablica messages ma DOKŁADNIE 3 elementy: system → user → assistant
+- assistant.content ZAWSZE zaczyna się od <think>\\n i kończy </think>\\n\\n przed outputem
+- Wszystkie cudzysłowy wewnątrz JSON są escape'owane jako \\"
+- Wszystkie newline są \\n (nie prawdziwe znaki końca linii)
+- metadata zawiera OBOWIĄZKOWO: unique_id, category, difficulty, project_type, instruction_format, is_negative_example, is_multi_turn, teaching_style, unique_twist, system_prompt_variant, tools_used (tablica!), estimated_tokens, domain, language, is_chaotic_user, is_deep_repo
+
+<tool_call name="nazwa_narzedzia"><args>{"klucz": "wartosc"}</args></tool_call> Musisz weryfikować, że Generator używa tego formatu. Odrzuć lub napraw każde wywołanie, które używa starego formatu zagnieżdżonego JSON bez atrybutu name.
+
+CRITICAL VALIDATION PATROL: 6 PRIORYTETÓW NAPRAWY (ANTI-JSON-ERROR)
+=============================================================
+Twoim nadrzędnym zadaniem jest wykrycie i naprawienie wszystkich 6 poniższych klas błędów. Każdy priorytet jest bezwzględnie obowiązujący.
+
+PRIORYTET 1 - BŁĘDY CUDZYSTOWÓW I PARSOWANIA JSON:
+MUSISZ bezwzględnie przeskanować tekst i naprawić strukturę JSON. Każdy cudzysłów użyty w stringach kodu MUSI być zamieniony na apostrof ( ' ) LUB bezwzględnie ucieczkowany jako \\". Cały naprawiony obiekt musi zostać zwrócony w dokładnie JEDNEJ linii.
+
+PRIORYTET 2 - FORMAT WYWOŁAŃ NARZĘDZI (TOOL_CALL FORMAT ENFORCEMENT):
+Zweryfikuj, że KAŻDE wywołanie narzędzia używa formatu <tool_call name="nazwa_narzedzia"><args>{"klucz": "wartosc"}</args></tool_call>.
+
+PRIORYTET 3 - NIEREALISTYCZNE TOOL_RESPONSE:
+Sprawdź każde <tool_response> i napraw, jeśli jest nierealistyczne.
+
+PRIORYTET 4 - DETEKCJA I NAPRAWA TRIPLE-ESCAPE HELL:
+Wykrywaj i naprawiaj błędy wielokrotnego ucieczkowania znaków.
+
+PRIORYTET 5 - WERYFIKACJA STRUKTURY SEKCJI <think> (4 OBOWIĄZKOWE NAGŁÓWKI):
+## 1. Architektura i Ograniczenia
+## 2. Threat Modeling
+## 3. Strategia ReAct
+## 4. JSONL Self-Check
+
+PRIORYTET 6 - GESTOŚĆ WIEDZY (ANTI-BOILERPLATE & TEMPLATE SMELL):
+Wykonaj Multi-Pass Review (PASS 1-3). PASS 2 ocenia kod w skali 1-10. Jeśli poniżej 9.5 → PASS 3 (POLISH & REPAIR).
+
+## NOWOŚĆ v69.0: TEST GĘSTOŚCI MYŚLENIA (ANTI-FLUFF SYSTEM)
+Sprawdź unikalność n-gramów (5+ słów) w <think>. Powtórzenie 3+ razy → INVALID.
+
+## NOWOŚĆ v69.0: WERYFIKACJA BRUTALNYCH OGRANICZEŃ (STRICT CONSTRAINTS)
+Jeśli w prompcie są ograniczenia algorytmiczne, zweryfikuj że kod je spełnia.
+
+## NOWOŚĆ v69.0: WERYFIKACJA SYMULACJI AWARII ŚRODOWISKA
+Jeśli tool_response zawiera błąd systemowy, zweryfikuj reakcję agenta.
+
+## NOWOŚĆ v70.0: 8 ZAAWANSOWANYCH MECHANIZMÓW WALIDACJI
+1. FAKE API DETECTION: Sprawdź, czy wszystkie importowane/wołane funkcje istnieją w standardowych bibliotekach danego języka. Odrzuć halucynowane API.
+2. CROSS-FILE CONSISTENCY: Zweryfikuj, czy każdy import w jednym pliku ma odpowiadającą definicję w pliku docelowym.
+3. DEAD CODE DETECTION: Wykryj i oznacz funkcje/zmienne, które są zdefiniowane ale nigdzie nieużywane.
+4. SEMANTIC UNIQUENESS: Porównaj fingerprint przykładu z ostatnimi 20 – odrzuć jeśli zbyt podobny.
+5. CYCLOMATIC COMPLEXITY GATE: Sprawdź czy złożoność kodu mieści się w widełkach dla danego difficulty.
+6. DEPENDENCY VERSION REALISM: Zweryfikuj format i realność wersji zależności.
+7. TOKEN EFFICIENCY: Oceń gęstość operacji biznesowych na token – ostrzeż przy niskiej.
+8. ADVERSARIAL SELF-TEST: Sprawdź czy testy zawierają przypadki brzegowe (puste wejście, ekstrema).
+
+## DODATKOWE REGUŁY JAKOŚCI:
+- ZERO boilerplate comments, ZERO nadmiernego logowania, ABSOLUTNY nakaz domenowego nazewnictwa.
+- Weryfikuj unique_twist, is_negative_example, is_chaotic_user, is_deep_repo zgodnie z regułami.
+
+OBSŁUGA PRZYCIĘTYCH / URWANYCH PLIKÓW (KRYTYCZNE!)
+STRATEGIA 1 - DOKOŃCZ (>66% poprawności). STRATEGIA 2 - WYGENERUJ ŚWIEŻY (<40%).
+
+============================================================
+ANTI-REPETITION AWARENESS
+============================================================
+WARIANT 1 - "Pragmatyczny Senior" (system_prompt_variant: 1)
+WARIANT 2 - "Architekt z Obsesją Jakości" (system_prompt_variant: 2)
+WARIANT 3 - "SRE-First Pragmatist" (system_prompt_variant: 3)
+WARIANT 4 - "Security-First Hardener" (system_prompt_variant: 4)
+
+REGULA tool_response W DANYCH TRENINGOWYCH (KRYTYCZNE!)
+<tool_response> MUSI być obecne i REALISTYCZNE.
+
+================================================================================
+PEŁNY KATALOG NARZĘDZI v68.0
+================================================================================
+(wszystkie narzędzia jak w oryginale)
+
+BŁĘDY DO NAPRAWY:
+- Nieznane narzędzie → zastąp najbliższym z katalogu
+- Brak wymaganego argumentu → dodaj sensowną wartość
+
+MULTI-TURN: is_multi_turn: true → ---TURN_BREAK--- obecne.
+TEACHING STYLE + DIFFICULTY: easy(150-400), medium(400-800), hard(800-1400), extreme(1400-2200+).
+
+WYMAGANE WZORCE (każdy przykład):
+(sprawdź wszystkie 39 punktów z listy w tym nowe v70.0)
+
+======================================================================
+JSONL SELF-CHECK PRZED ZWRÓCENIEM:
+======================================================================
+Zweryfikuj wszystkie 39 punktów + 8 nowych mechanizmów v70.0.
+
+======================================================================
+WYJŚCIE:
+======================================================================
+Zwróć WYŁĄCZNIE jedną linię JSONL.`;
+
+  // ========================== TOOL SCHEMAS ==========================
+  const TOOL_SCHEMAS = {
+    'read_file': { required: ['path'], optional: [] },
+    'write_file': { required: ['path', 'content'], optional: [] },
+    'replace_in_file': { required: ['path', 'old_str', 'new_str'], optional: [] },
+    'delete_file': { required: ['path'], optional: [] },
+    'create_directory': { required: ['path'], optional: [] },
+    'move_file': { required: ['src_path', 'dst_path'], optional: [] },
+    'copy_file': { required: ['src_path', 'dst_path'], optional: [] },
+    'list_files': { required: ['path', 'depth'], optional: [] },
+    'search_code': { required: ['regex', 'path'], optional: [] },
+    'file_diff': { required: ['path_a', 'path_b'], optional: [] },
+    'execute_command': { required: ['command', 'cwd'], optional: ['timeout_ms', 'env'] },
+    'get_env_info': { required: [], optional: [] },
+    'env_get': { required: ['key'], optional: [] },
+    'env_set': { required: ['key', 'value', 'scope'], optional: [] },
+    'check_port': { required: ['port'], optional: [] },
+    'kill_process_on_port': { required: ['port'], optional: [] },
+    'ssh_exec': { required: ['host', 'user', 'command'], optional: ['key_path'] },
+    'http_request': { required: ['method', 'url'], optional: ['headers', 'body', 'timeout_ms'] },
+    'cron_job_create': { required: ['name', 'schedule', 'command', 'cwd'], optional: [] },
+    'cron_job_list': { required: [], optional: [] },
+    'git_status': { required: ['repo_path'], optional: [] },
+    'git_diff': { required: ['repo_path'], optional: ['file'] },
+    'git_add': { required: ['repo_path', 'files'], optional: [] },
+    'git_commit': { required: ['repo_path', 'message'], optional: [] },
+    'git_create_branch': { required: ['repo_path', 'name'], optional: [] },
+    'git_checkout': { required: ['repo_path', 'branch_or_commit'], optional: [] },
+    'git_push': { required: ['repo_path', 'remote', 'branch'], optional: [] },
+    'git_pull': { required: ['repo_path', 'remote', 'branch'], optional: [] },
+    'git_resolve_conflict': { required: ['repo_path', 'file', 'strategy'], optional: [] },
+    'git_stash': { required: ['repo_path'], optional: [] },
+    'git_stash_pop': { required: ['repo_path'], optional: [] },
+    'git_tag': { required: ['repo_path', 'tag'], optional: ['message'] },
+    'git_log': { required: ['repo_path'], optional: ['limit'] },
+    'run_tests': { required: [], optional: ['path', 'coverage', 'watch'] },
+    'run_linter': { required: [], optional: ['path', 'fix'] },
+    'run_static_analysis': { required: [], optional: ['path', 'strict'] },
+    'run_playwright_test': { required: [], optional: ['test', 'headed', 'browser'] },
+    'screenshot_compare': { required: [], optional: ['baseline', 'threshold'] },
+    'check_wcag': { required: [], optional: ['url', 'level'] },
+    'run_security_scan': { required: ['path'], optional: ['severity'] },
+    'run_profiler': { required: ['path'], optional: ['duration_ms', 'type'] },
+    'run_load_test': { required: [], optional: ['endpoint', 'duration', 'vus', 'rps'] },
+    'docker_build': { required: [], optional: ['tag', 'dockerfile', 'context', 'args'] },
+    'docker_run': { required: [], optional: ['image', 'ports', 'env', 'volumes', 'detach'] },
+    'docker_compose_up': { required: [], optional: ['file', 'services', 'detach'] },
+    'docker_compose_down': { required: [], optional: ['file', 'volumes'] },
+    'docker_logs': { required: [], optional: ['container', 'tail', 'follow'] },
+    'docker_exec': { required: ['container', 'command'], optional: [] },
+    'docker_inspect': { required: ['container'], optional: [] },
+    'docker_image_scan': { required: ['image'], optional: [] },
+    'db_query': { required: ['query'], optional: ['params', 'connection'] },
+    'db_migrate': { required: [], optional: ['direction', 'steps', 'dry_run'] },
+    'db_schema_inspect': { required: [], optional: ['table', 'include_indexes'] },
+    'db_explain': { required: ['query'], optional: ['analyze'] },
+    'db_seed': { required: [], optional: ['file', 'truncate'] },
+    'db_backup': { required: ['output_path'], optional: ['compress'] },
+    'db_restore': { required: ['input_path'], optional: [] },
+    'redis_get': { required: ['key'], optional: ['connection'] },
+    'redis_set': { required: ['key', 'value'], optional: ['ttl_seconds', 'connection'] },
+    'redis_del': { required: ['key'], optional: ['connection'] },
+    'redis_flush': { required: [], optional: ['pattern', 'connection'] },
+    'kafka_publish': { required: ['topic', 'message'], optional: ['partition_key'] },
+    'kafka_consume': { required: ['topic', 'group_id'], optional: ['max_messages', 'timeout_ms'] },
+    'kafka_topic_create': { required: ['name'], optional: ['partitions', 'replication_factor'] },
+    'cloud_deploy': { required: ['provider', 'config'], optional: [] },
+    'cloud_logs': { required: ['provider', 'service'], optional: ['tail', 'filter'] },
+    'cloud_secret_get': { required: ['provider', 'secret_name'], optional: [] },
+    'cloud_secret_set': { required: ['provider', 'secret_name', 'value'], optional: [] },
+    'cloud_storage_upload': { required: ['provider', 'bucket', 'local_path', 'remote_path'], optional: [] },
+    'cloud_storage_download': { required: ['provider', 'bucket', 'remote_path', 'local_path'], optional: [] },
+    'cloud_cdn_invalidate': { required: ['provider', 'paths'], optional: [] },
+    'k8s_apply': { required: ['file'], optional: ['namespace', 'dry_run'] },
+    'k8s_get_pods': { required: [], optional: ['namespace', 'label_selector'] },
+    'k8s_logs': { required: ['pod'], optional: ['namespace', 'container', 'tail'] },
+    'k8s_rollback': { required: ['deployment'], optional: ['namespace', 'revision'] },
+    'k8s_scale': { required: ['deployment', 'replicas'], optional: ['namespace'] },
+    'k8s_exec': { required: ['pod', 'command'], optional: ['namespace'] },
+    'k8s_port_forward': { required: ['pod', 'local_port', 'pod_port'], optional: ['namespace'] },
+    'feature_flag_create': { required: ['name', 'description'], optional: ['enabled', 'rollout_percent'] },
+    'feature_flag_update': { required: ['name', 'enabled'], optional: ['rollout_percent', 'user_targets'] },
+    'feature_flag_list': { required: [], optional: [] },
+    'browse_web': { required: ['url'], optional: ['wait_for', 'javascript'] },
+    'mcp_search': { required: ['query'], optional: ['max_results'] },
+    'mcp_fetch_section': { required: ['url', 'selector'], optional: [] },
+    'preview_url': { required: ['url'], optional: ['viewport'] },
+    'lsp_go_to_definition': { required: ['file', 'line', 'character'], optional: [] },
+    'lsp_find_references': { required: ['file', 'line', 'character'], optional: [] },
+    'lsp_rename_symbol': { required: ['file', 'line', 'character', 'newName'], optional: [] },
+    'lsp_get_diagnostics': { required: [], optional: ['file'] },
+    'dap_set_breakpoint': { required: ['file', 'line'], optional: ['condition'] },
+    'dap_inspect_variable': { required: ['name'], optional: ['scope'] },
+    'dap_step_over': { required: [], optional: [] },
+    'dap_step_into': { required: [], optional: [] },
+    'dap_continue': { required: [], optional: [] },
+    'dap_evaluate': { required: ['expression'], optional: [] },
+    'ask_clarification': { required: ['question'], optional: ['options'] },
+    'notify': { required: ['message'], optional: ['level'] },
+    'dependency_check': { required: ['package'], optional: ['version', 'ecosystem'] },
+  };
+
+  // ========================== HELPERS (oryginalne) ==========================
+  function estimateTokens(text) { return Math.round(text.length / 4); }
+
+  function fixNewlinesInJsonStrings(str) {
+    let result = '', inString = false, escaped = false;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (escaped) { result += ch; escaped = false; continue; }
+      if (ch == '\\' && inString) { result += ch; escaped = true; continue; }
+      if (ch == '"') { inString = !inString; result += ch; continue; }
+      if (inString) {
+        if (ch == '\n') { result += '\\n'; continue; }
+        if (ch == '\r') { result += '\\r'; continue; }
+        if (ch == '\t') { result += '\\t'; continue; }
+        const code = ch.charCodeAt(0);
+        if (code < 0x20) { result += '\\u' + code.toString(16).padStart(4, '0'); continue; }
+      }
+      result += ch;
+    }
+    return result;
+  }
+
+  function autoFix(raw) {
+    let text = raw.trim();
+    text = text.replace(/^\uFEFF/, '').replace(/\0/g, '');
+    text = text.replace(/^```(?:\w+)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    const f = text.indexOf('{'), l = text.lastIndexOf('}');
+    if (f != -1 && l != -1 && l > f && (f > 0 || l < text.length - 1))
+      text = text.slice(f, l + 1);
+    text = text.replace(/,\s*([\]}])/g, '$1');
+    text = fixNewlinesInJsonStrings(text);
+    text = text.replace(/(?<!\\)\\(?![\\/bfnrtu])/g, '\\\\');
+    return text;
+  }
+
+  function validateToolCalls(content, issues) {
+    const reNew = /<tool_call\s+name="([^"]+)">\s*<args>(.*?)<\/args>\s*<\/tool_call>/gs;
+    let m;
+    while ((m = reNew.exec(content)) != null) {
+      const name = m[1];
+      let args = {};
+      try { args = JSON.parse(m[2]); }
+      catch { issues.push('Niepoprawny JSON w <args> dla narzędzia: ' + name); continue; }
+      if (!TOOL_SCHEMAS[name]) { issues.push('Nieznane narzędzie: "' + name + '"'); continue; }
+      const schema = TOOL_SCHEMAS[name];
+      schema.required.forEach(r => { if (!(r in args)) issues.push('Brak arg "' + r + '" w ' + name); });
+      const allowed = [...schema.required, ...schema.optional];
+      Object.keys(args).forEach(k => { if (!allowed.includes(k)) issues.push('Nieznany arg "' + k + '" w ' + name); });
+    }
+    const reOld = /<tool_call>(.*?)<\/tool_call>/gs;
+    while ((m = reOld.exec(content)) != null) {
+      try {
+        const tc = JSON.parse(m[1]);
+        issues.push('Stary format tool_call bez atrybutu name wykryty dla: "' + tc.name + '" - wymaga konwersji do <tool_call name="..."><args>...</args></tool_call>');
+      } catch { issues.push('Niepoprawny JSON w starym formacie <tool_call> - wymaga naprawy'); }
+    }
+  }
+
+  function validateCodeQuality(content, issues, warnings) {
+    const boilerplateCommentPatterns = [
+      /\/\/ import \w+/gi,
+      /\/\/ handle error here/gi,
+      /\/\/ logic goes here/gi,
+      /\/\/ TODO/gi,
+      /\/\/ placeholder/gi,
+      /# TODO/gi,
+      /# logic goes here/gi,
+      /# handle error/gi,
+    ];
+    let boilerplateCount = 0;
+    for (const pattern of boilerplateCommentPatterns) {
+      const matches = content.match(pattern);
+      if (matches) boilerplateCount += matches.length;
+    }
+    if (boilerplateCount > 0) {
+      issues.push('PRIORYTET 6: Wykryto ' + boilerplateCount + ' boilerplate comment(s) - kod musi być produkcyjny i samo-wyjaśniający się');
+    }
+    const massiveDebugLogPatterns = [
+      /console\.log\(/g,
+      /console\.debug\(/g,
+      /print\(f?['"]/g,
+      /fmt\.Println\(/g,
+      /System\.out\.println\(/g,
+    ];
+    let debugLogCount = 0;
+    for (const pattern of massiveDebugLogPatterns) {
+      const matches = content.match(pattern);
+      if (matches) debugLogCount += matches.length;
+    }
+    if (debugLogCount > 3) {
+      warnings.push('⚠ PRIORYTET 6: ' + debugLogCount + ' wywołań debug log - zastąp ustrukturyzowanym loggerem biznesowym');
+    }
+    const bannedVarNames = /\b(data|temp|obj|handler1|handler2|res2|tmp|foo|bar|baz)\b/g;
+    const bannedMatches = content.match(bannedVarNames);
+    if (bannedMatches && bannedMatches.length > 2) {
+      warnings.push('⚠ PRIORYTET 6: Wykryto generyczne nazwy zmiennych (' + [...new Set(bannedMatches)].join(', ') + ') - wymagane domenowe nazewnictwo');
+    }
+  }
+
+  // ========================== v69.0: ANTI-FLUFF SYSTEM ==========================
+  function checkThinkDensity(thinkContent, issues) {
+    const sentences = thinkContent.split(/[.!?;]\s+/).filter(s => s.trim().length > 0);
+    if (sentences.length < 5) return;
+    const ngramCounts = new Map();
+    for (const sentence of sentences) {
+      const words = sentence.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      if (words.length < 5) continue;
+      for (let i = 0; i <= words.length - 5; i++) {
+        const ngram = words.slice(i, i + 5).join(' ');
+        ngramCounts.set(ngram, (ngramCounts.get(ngram) || 0) + 1);
+      }
+      if (words.length >= 5) {
+        const fullNgram = words.join(' ');
+        ngramCounts.set(fullNgram, (ngramCounts.get(fullNgram) || 0) + 1);
+      }
+    }
+    const fluffAlerts = [];
+    for (const [ngram, count] of ngramCounts.entries()) {
+      if (count >= 3) fluffAlerts.push({ ngram, count });
+    }
+    if (fluffAlerts.length > 0) {
+      const topFluff = fluffAlerts.sort((a, b) => b.count - a.count).slice(0, 3);
+      for (const fluff of topFluff) {
+        issues.push('ANTI-FLUFF v69.0: N-gram powtórzony ' + fluff.count + 'x w <think>: "' + fluff.ngram.substring(0, 80) + '..." - myślenie musi być gęste, bez lania wody!');
+      }
+    }
+  }
+
+  // ========================== v69.0: STRICT CONSTRAINTS VERIFICATION ==========================
+  function verifyStrictConstraints(content, issues) {
+    const lowerContent = content.toLowerCase();
+    const hasO1Memory = lowerContent.includes('o(1)') && (lowerContent.includes('pamięć') || lowerContent.includes('memory') || lowerContent.includes('pamięciowa'));
+    const hasNoLoops = lowerContent.includes('bez uży') && (lowerContent.includes('pętli') || lowerContent.includes('for') || lowerContent.includes('while'));
+    const hasNoExternalLibs = lowerContent.includes('bez') && (lowerContent.includes('zewnętrznych bibliotek') || lowerContent.includes('external lib'));
+    const hasMaxLines = lowerContent.match(/max\s*(\d+)\s*lin[ii]/i) || lowerContent.match(/nie może przekroczyć\s*(\d+)\s*lin[ii]/i);
+    if (hasO1Memory) {
+      const growingDataStructures = content.match(/\b(Vec|VecDeque|HashMap|HashSet|BTreeMap|ArrayList|LinkedList|vector|list|dict|set|map|slice|array)\b/gi);
+      if (growingDataStructures && growingDataStructures.length > 1) {
+        issues.push('STRICT_CONSTRAINT_VIOLATION v69.0: Kod wymaga O(1) pamięci ale używa rosnących struktur: ' + [...new Set(growingDataStructures)].join(', '));
+      }
+      const dynamicAllocs = content.match(/\b(new\s+(Vec|ArrayList|HashMap|LinkedList|String)|malloc|calloc|realloc|Box::new|Rc::new|Arc::new)\b/gi);
+      if (dynamicAllocs && dynamicAllocs.length > 0) {
+        issues.push('STRICT_CONSTRAINT_VIOLATION v69.0: Kod wymaga O(1) pamięci ale zawiera dynamiczne alokacje');
+      }
+    }
+    if (hasNoLoops) {
+      const loopPatterns = content.match(/\b(for\s*\(|while\s*\(|for\s+\w+\s+in\s+|loop\s*\{|\.for_each)\b/gi);
+      if (loopPatterns && loopPatterns.length > 0) {
+        issues.push('STRICT_CONSTRAINT_VIOLATION v69.0: Kod nie może używać pętli for/while ale zawiera: ' + loopPatterns.join(', '));
+      }
+    }
+    if (hasNoExternalLibs) {
+      const importPatterns = content.match(/\b(import\s+\w+|from\s+\w+\s+import|require\s*\(|use\s+\w+::|using\s+\w+\.|#include\s*<)/gi);
+      if (importPatterns && importPatterns.length > 3) {
+        issues.push('STRICT_CONSTRAINT_VIOLATION v69.0: Kod nie może używać zewnętrznych bibliotek ale zawiera liczne importy');
+      }
+    }
+    if (hasMaxLines) {
+      const maxLines = parseInt(hasMaxLines[1]);
+      const afterThink = content.indexOf('</think>');
+      if (afterThink > -1) {
+        const codePart = content.substring(afterThink + 8);
+        const codeLines = codePart.split('\\n').filter(l => l.trim().length > 0 && !l.trim().startsWith('//')).length;
+        if (codeLines > maxLines) {
+          issues.push('STRICT_CONSTRAINT_VIOLATION v69.0: Kod ma ' + codeLines + ' linii, limit to ' + maxLines);
+        }
+      }
+    }
+  }
+
+  // ========================== v69.0: SYSTEM FAILURE VALIDATION ==========================
+  function validateSystemFailures(content, issues, warnings) {
+    const systemFailurePatterns = [
+      { pattern: /segmentation\s*fault/i, name: 'Segmentation fault' },
+      { pattern: /out\s*of\s*memory/i, name: 'Out of Memory' },
+      { pattern: /connection\s*timed?\s*out/i, name: 'Connection timed out' },
+      { pattern: /disk\s*quota\s*exceeded/i, name: 'Disk quota exceeded' },
+      { pattern: /too\s*many\s*open\s*files/i, name: 'Too many open files' },
+      { pattern: /EAGAIN/i, name: 'EAGAIN' },
+    ];
+    let foundFailures = [];
+    for (const fp of systemFailurePatterns) {
+      if (fp.pattern.test(content)) foundFailures.push(fp.name);
+    }
+    if (foundFailures.length > 0) {
+      const hasSysadminResponse = /alokacj[ęi]|allocation|retry|backoff|timeout.*handling|restrukturyzacj[ęi]|sysctl|ulimit|OOM.*score|memory.*pressure|buffer.*size|chunk.*size|mmap|madvise|mprotect|resource.*limit/i;
+      const hasSystemDiagnosis = /diagnoz[ae]|kernel|proces|signal|dmesg|journalctl|syslog|kill\s*-\d+|SIGKILL|SIGSEGV|oom_reaper|oom_score_adj/i;
+      if (!hasSysadminResponse.test(content)) {
+        issues.push('SYSTEM_FAILURE_VALIDATION v69.0: Wykryto błąd systemowy (' + foundFailures.join(', ') + ') ale agent NIE reaguje jak sysadmin – brak retry/backoff/zmiany alokacji!');
+      } else {
+        warnings.push('✅ SYSTEM_FAILURE v69.0: Agent poprawnie reaguje na błąd systemowy (' + foundFailures.join(', ') + ')');
+      }
+      if (!hasSystemDiagnosis.test(content)) {
+        warnings.push('⚠ SYSTEM_FAILURE v69.0: Agent reaguje na błąd systemowy ale brak diagnozy na poziomie OS (kernel/procesy/signal)');
+      }
+      const hasRealisticFormat = /core\s*dumped|0x[0-9a-f]+|killed\s*process|exit\s*code|signal\s*\d+/i;
+      if (!hasRealisticFormat.test(content)) {
+        warnings.push('⚠ SYSTEM_FAILURE v69.0: Błąd systemowy ma nierealistyczny format – dodaj adresy pamięci, kody wyjścia, nazwy sygnałów');
+      }
+    }
+  }
+
+  // ========================== v70.0: NOWE MECHANIZMY WALIDACYJNE ==========================
+
+  // 1. Fake API Detection
+  function detectFakeApiCalls(content, language, issues) {
+    const stdlibModules = {
+      'Python': ['os', 'sys', 're', 'json', 'math', 'datetime', 'collections', 'itertools', 'functools', 'pathlib', 'typing', 'uuid', 'hashlib', 'base64', 'logging', 'unittest', 'argparse', 'csv', 'io', 'xml', 'html', 'http', 'urllib', 'socket', 'ssl', 'email', 'sqlite3', 'tempfile', 'shutil', 'glob', 'fnmatch', 'time', 'threading', 'multiprocessing', 'subprocess', 'asyncio', 'concurrent', 'typing_extensions'],
+      'TypeScript/Node.js': ['fs', 'path', 'os', 'http', 'https', 'url', 'querystring', 'stream', 'util', 'events', 'assert', 'buffer', 'crypto', 'zlib', 'readline', 'net', 'dns', 'dgram', 'cluster', 'child_process', 'worker_threads', 'tls', 'v8', 'vm'],
+      'Rust': ['std::collections', 'std::io', 'std::fs', 'std::path', 'std::thread', 'std::sync', 'std::time', 'std::net', 'std::env', 'std::process', 'std::fmt', 'std::str', 'std::vec', 'std::string', 'std::option', 'std::result'],
+      'Go': ['fmt', 'net/http', 'io', 'os', 'time', 'sync', 'encoding/json', 'errors', 'strings', 'strconv', 'bytes', 'bufio', 'context', 'log', 'flag', 'path/filepath', 'reflect', 'regexp', 'sort', 'testing'],
+      'Java': ['java.util', 'java.io', 'java.nio', 'java.net', 'java.sql', 'java.time', 'java.lang', 'java.math', 'java.security', 'java.text', 'java.util.concurrent', 'java.util.stream'],
+      'C#/.NET': ['System', 'System.Collections.Generic', 'System.IO', 'System.Linq', 'System.Net.Http', 'System.Text', 'System.Threading.Tasks', 'Microsoft.Extensions.DependencyInjection', 'Microsoft.Extensions.Logging'],
+      'C++': ['iostream', 'fstream', 'sstream', 'string', 'vector', 'map', 'set', 'algorithm', 'memory', 'thread', 'mutex', 'chrono', 'filesystem', 'regex', 'random']
+    };
+    const allowedModules = stdlibModules[language] || [];
+    if (allowedModules.length === 0) return;
+    const importRegex = /import\s+(\w[\w.]*)/g;
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      const mod = match[1];
+      if (!allowedModules.some(allowed => mod.startsWith(allowed))) {
+        issues.push('FAKE_API v70.0: Podejrzany import "' + mod + '" – nie znajduje się w standardowej bibliotece ' + language + ' i może być halucynacją.');
+        stats.fakeApiCalls++;
+      }
+    }
+  }
+
+  // 2. Cross-File Consistency
+  function checkCrossFileConsistency(content, issues) {
+    const fileSections = content.split(/\/\/ FILE:\s*(.+)/);
+    const files = {};
+    for (let i = 1; i < fileSections.length; i += 2) {
+      const filePath = fileSections[i].trim();
+      const fileContent = fileSections[i + 1] || '';
+      files[filePath] = fileContent;
+    }
+    const definedSymbols = {};
+    for (const [path, code] of Object.entries(files)) {
+      const defs = [];
+      const funcRegex = /(?:function|def|func|fn|class|const|let|var)\s+(\w+)/g;
+      let m;
+      while ((m = funcRegex.exec(code)) !== null) defs.push(m[1]);
+      definedSymbols[path] = defs;
+    }
+    for (const [path, code] of Object.entries(files)) {
+      const importRegex = /(?:import|require|from)\s+(?:\{?\s*(\w+)\s*\}?\s*from\s+['"]\.?\/?([^'"]+)['"]|['"](\w+)['"])/g;
+      let m;
+      while ((m = importRegex.exec(code)) !== null) {
+        const importedName = m[1] || m[3];
+        const targetFile = m[2];
+        if (!importedName) continue;
+        let found = false;
+        for (const [fpath, symbols] of Object.entries(definedSymbols)) {
+          if (fpath.includes(targetFile)) {
+            if (symbols.includes(importedName)) found = true;
+            break;
+          }
+        }
+        if (!found) {
+          issues.push('CROSS_FILE v70.0: Import "' + importedName + '" w pliku ' + path + ' nie został znaleziony w pliku docelowym.');
+          stats.crossFileInconsistencies++;
+        }
+      }
+    }
+  }
+
+  // 3. Dead Code Detection
+  function detectDeadCode(content, issues) {
+    const funcDefs = content.match(/(?:function|def|fn|func|class|const|let|var)\s+(\w+)/g) || [];
+    const usedSymbols = new Set();
+    const usageRegex = /\b(\w+)\s*\(/g;
+    let m;
+    while ((m = usageRegex.exec(content)) !== null) usedSymbols.add(m[1]);
+    for (const def of funcDefs) {
+      const name = def.split(/\s+/)[1];
+      if (!usedSymbols.has(name) && !['main', 'index', 'handler', 'init'].includes(name)) {
+        issues.push('DEAD_CODE v70.0: Zdefiniowano "' + def + '" ale nigdzie nie użyto.');
+        stats.deadCodeOccurrences++;
+      }
+    }
+  }
+
+  // 4. Semantic Duplicate Detection
+  const recentFingerprints = [];
+  function detectSemanticDuplicate(parsed) {
+    if (!parsed.metadata) return false;
+    const fingerprint = `${parsed.metadata.language}|${parsed.metadata.domain}|${parsed.metadata.project_type}|${parsed.metadata.unique_twist}`;
+    if (recentFingerprints.includes(fingerprint)) {
+      stats.semanticDuplicates++;
+      return true;
+    }
+    recentFingerprints.push(fingerprint);
+    if (recentFingerprints.length > 20) recentFingerprints.shift();
+    return false;
+  }
+
+  // 5. Cyclomatic Complexity Gate
+  function checkCyclomaticComplexity(content, difficulty, issues) {
+    const complexity = (content.match(/\b(if|else\s+if|for|while|switch|case\b|catch)\b/g) || []).length + 1;
+    const limits = { easy: [1, 4], medium: [5, 12], hard: [13, 25], extreme: [26, 100] };
+    const [min, max] = limits[difficulty] || [0, Infinity];
+    if (complexity < min || complexity > max) {
+      issues.push('COMPLEXITY v70.0: Złożoność cyklomatyczna ' + complexity + ' poza zakresem dla ' + difficulty + ' (' + min + '-' + max + ').');
+      stats.complexityViolations++;
+    }
+  }
+
+  // 6. Dependency Version Consistency
+  function checkDependencyVersions(content, issues) {
+    const versionRegex = /"version"\s*:\s*"(\d+\.\d+\.\d+)"/g;
+    let m;
+    while ((m = versionRegex.exec(content)) !== null) {
+      const ver = m[1];
+      if (!/^\d+\.\d+\.\d+$/.test(ver)) {
+        issues.push('DEP_VERSION v70.0: Niewłaściwy format wersji "' + ver + '".');
+        stats.dependencyVersionIssues++;
+      }
+    }
+  }
+
+  // 7. Token Efficiency Score
+  function checkTokenEfficiency(content, issues) {
+    const operationalCount = (content.match(/(<tool_call|app\.(get|post|put|delete)|db\.(query|execute)|\.test\(|\.assert)/g) || []).length;
+    const tokens = estimateTokens(content);
+    if (tokens > 0 && operationalCount / tokens < 0.02) {
+      issues.push('TOKEN_EFF v70.0: Niska gęstość operacji (' + (operationalCount/tokens*100).toFixed(1) + '%) – kod może być rozwlekły.');
+      stats.tokenEfficiencyWarnings++;
+    }
+  }
+
+  // 8. Adversarial Self-Test
+  function checkAdversarialTests(content, issues) {
+    const testSection = content.match(/(?:describe|it|test|def test_|fn test_)/g) || [];
+    const adversarialIndicators = /(?:empty|null|undefined|NaN|extreme|boundary|invalid|negative|zero|large|overflow|injection|escape|script)/i;
+    let hasAdversarial = false;
+    for (const test of testSection) {
+      if (adversarialIndicators.test(test)) { hasAdversarial = true; break; }
+    }
+    if (!hasAdversarial && testSection.length > 0) {
+      issues.push('ADVERSARIAL v70.0: Brak testów przypadków brzegowych (np. puste wejście, ekstremalne wartości).');
+      stats.adversarialTestMissing++;
+    }
+  }
+
+  // ========================== GŁÓWNA WALIDACJA STRUKTURY (rozszerzona) ==========================
+  function validateStructure(parsed) {
+    const issues = [], warnings = [];
+    const difficulty = parsed?.metadata?.difficulty || 'unknown';
+    if (!parsed.messages || !Array.isArray(parsed.messages)) {
+      issues.push('Brak pola "messages"');
+      return { valid: false, issues, warnings };
+    }
+    if (parsed.messages.length != 3)
+      issues.push('messages ma ' + parsed.messages.length + ' el. zamiast 3');
+    ['system', 'user', 'assistant'].forEach((role, i) => {
+      if (parsed.messages[i]?.role != role)
+        issues.push('messages[' + i + '].role != "' + role + '"');
+      if (!parsed.messages[i]?.content || parsed.messages[i].content.length < 10)
+        issues.push('messages[' + i + '].content za krótki');
+    });
+    const am = parsed.messages.find(m => m.role === 'assistant');
+    if (am?.content) {
+      const c = am.content;
+      if (!c.includes('<think>')) issues.push('Brak <think>');
+      if (!c.includes('</think>')) issues.push('Brak </think>');
+      const ts = c.indexOf('<think>');
+      const te = c.indexOf('</think>');
+      if (ts != -1 && te != -1 && te > ts) {
+        const thinkContent = c.slice(ts + 7, te);
+        const thinkTokens = estimateTokens(thinkContent);
+        if (thinkTokens < 400) issues.push('<think> za krótki: ~' + thinkTokens + ' tokenów (min 400)');
+        if (!thinkContent.includes('## 1. Architektura i Ograniczenia'))
+          issues.push('<think> brak sekcji "## 1. Architektura i Ograniczenia" (Priorytet 5)');
+        if (!thinkContent.includes('## 2. Threat Modeling'))
+          issues.push('<think> brak sekcji "## 2. Threat Modeling" (Priorytet 5)');
+        if (!thinkContent.includes('## 3. Strategia ReAct'))
+          issues.push('<think> brak sekcji "## 3. Strategia ReAct" (Priorytet 5)');
+        if (!thinkContent.includes('## 4. JSONL Self-Check'))
+          issues.push('<think> brak sekcji "## 4. JSONL Self-Check" (Priorytet 5)');
+        if (!thinkContent.includes('PASS') && !thinkContent.includes('VALIDATION') && !thinkContent.includes('CRITIQUE') && !thinkContent.includes('REPAIR')) {
+          warnings.push('PRIORYTET 6: Brak śladów Multi-Pass Review (PASS 1/2/3) w sekcji <think> - reviewer powinien dokumentować kroki weryfikacji');
+        }
+        checkThinkDensity(thinkContent, issues);
+      }
+      if (te != -1) {
+        const after = c.slice(te + 8).trim();
+        if (after.length < 150) issues.push('Output po </think> za krótki');
+        if (!(after.match(/\/\/ FILE:/g) || []).length) issues.push('Brak // FILE:');
+        if (!after.includes('<tool_call')) issues.push('Brak <tool_call>');
+        const afterTokens = estimateTokens(after);
+        const minTokens = { easy: 150, medium: 400, hard: 800, extreme: 1400 };
+        if (minTokens[difficulty] && afterTokens < minTokens[difficulty])
+          issues.push('Output za krótki dla ' + difficulty + ': ~' + afterTokens + ' tokenów (min ' + minTokens[difficulty] + ')');
+        if (!after.includes('git_commit')) {
+          if (difficulty == 'easy') warnings.push('Brak git_commit (opcjonalny easy)');
+          else if (difficulty != 'unknown') issues.push('Brak git_commit (wymagany medium+)');
+          else warnings.push('Brak git_commit');
+        }
+        if (!after.includes('run_tests')) {
+          if (difficulty === 'easy') warnings.push('Brak run_tests (opcjonalne easy)');
+          else if (difficulty !== 'unknown') issues.push('Brak run_tests (wymagane medium+)');
+          else warnings.push('Brak run_tests');
+        }
+        if (!after.includes('run_security_scan') && (difficulty === 'hard' || difficulty === 'extreme'))
+          issues.push('Brak run_security_scan (wymagane hard/extreme)');
+        if (!after.includes('BENCHMARK') && (difficulty === 'hard' || difficulty === 'extreme'))
+          warnings.push('Brak BENCHMARK (zalecane hard/extreme)');
+        if (!after.includes('retry') && !after.includes('fallback') && !after.includes('circuit') && !after.includes('SELF-CORRECTION'))
+          warnings.push('Brak error recovery pattern');
+        if (!after.includes('zod') && !after.includes('pydantic') && !after.includes('class-validator') && !after.includes('validate'))
+          warnings.push('Brak walidacji inputów');
+        validateToolCalls(after, issues);
+        validateCodeQuality(after, issues, warnings);
+
+        // v69.0 checks
+        verifyStrictConstraints(c, issues);
+        validateSystemFailures(c, issues, warnings);
+
+        // v70.0 NOWE CHECKS
+        detectFakeApiCalls(after, parsed.metadata?.language || 'unknown', issues);
+        checkCrossFileConsistency(after, issues);
+        detectDeadCode(after, issues);
+        checkCyclomaticComplexity(after, difficulty, issues);
+        checkDependencyVersions(after, issues);
+        checkTokenEfficiency(after, issues);
+        checkAdversarialTests(after, issues);
+
+        if (detectSemanticDuplicate(parsed)) {
+          issues.push('SEMANTIC_DUPLICATE v70.0: Przykład ma identyczny fingerprint jak jeden z ostatnich 20.');
+        }
+
+        // chaos/deep_repo checks
+        if (parsed.metadata?.is_chaotic_user === true) {
+          const firstWriteIdx = c.indexOf('<tool_call name="write_file"');
+          const firstReplaceIdx = c.indexOf('<tool_call name="replace_in_file"');
+          const firstDeleteIdx = c.indexOf('<tool_call name="delete_file"');
+          const firstMod = Math.min(
+            firstWriteIdx > -1 ? firstWriteIdx : Infinity,
+            firstReplaceIdx > -1 ? firstReplaceIdx : Infinity,
+            firstDeleteIdx > -1 ? firstDeleteIdx : Infinity
+          );
+          const askIdx = c.indexOf('<tool_call name="ask_clarification"');
+          if (firstMod < Infinity && askIdx === -1) {
+            issues.push('PRIORYTET 6: is_chaotic_user:true – brak ask_clarification przed modyfikacjami plików!');
+          } else if (firstMod < Infinity && askIdx > firstMod) {
+            issues.push('PRIORYTET 6: is_chaotic_user:true – ask_clarification użyte PO modyfikacjach plików!');
+          }
+        }
+        if (parsed.metadata?.is_deep_repo === true) {
+          if (!c.includes('<tool_call name="list_files"')) {
+            issues.push('PRIORYTET 6: is_deep_repo:true – brak list_files!');
+          }
+          if (!c.includes('<tool_call name="search_code"')) {
+            issues.push('PRIORYTET 6: is_deep_repo:true – brak search_code!');
+          }
+          if (!c.includes('<tool_call name="read_file"')) {
+            issues.push('PRIORYTET 6: is_deep_repo:true – brak read_file!');
+          }
+        }
+      }
+      if (c.includes('---TURN_BREAK---')) {
+        const turns = c.split('---TURN_BREAK---');
+        turns.forEach((t, i) => {
+          if (!t.includes('<think>')) issues.push('Tura ' + (i + 1) + ' bez <think>');
+          if (!t.includes('</think>')) issues.push('Tura ' + (i + 1) + ' bez </think>');
+        });
+        if ((difficulty === 'hard' || difficulty === 'extreme') && parsed.metadata?.is_multi_turn === true) {
+          const toolCallMatches = c.match(/<tool_call\s+name="/g) || [];
+          if (toolCallMatches.length < 3) {
+            issues.push('PRIORYTET 6: hard/extreme multi-turn wymaga minimum 3 unikalnych interakcji z narzędziami, wykryto: ' + toolCallMatches.length);
+          }
+        }
+      }
+    }
+    if (parsed.metadata?.is_multi_turn === true && !c.includes('---TURN_BREAK---'))
+      issues.push('is_multi_turn:true ale brak TURN_BREAK');
+    if (parsed.metadata?.is_multi_turn === false && c.includes('---TURN_BREAK---'))
+      issues.push('is_multi_turn:false ale jest TURN_BREAK');
+    if (parsed.metadata?.is_negative_example === true) {
+      if (!c.includes('SELF-CORRECTION') && !c.includes('INCORRECT') && !c.includes('błąd') && !c.includes('error') && !c.includes('napraw')) {
+        warnings.push('PRIORYTET 6: is_negative_example:true ale brak śladów błędu i jego naprawy w treści - przykład negatywny musi demonstrować wykrycie i korekcję błędu');
+      }
+    }
+    const bannedTwistKeywords = ['Auth', 'JWT', 'CRUD', 'Todo', 'UserManagement', 'Blogging', 'ShoppingCart', 'PaymentGateway'];
+    if (parsed.metadata?.unique_twist) {
+      for (const kw of bannedTwistKeywords) {
+        if (parsed.metadata.unique_twist.toLowerCase().includes(kw.toLowerCase())) {
+          warnings.push('PRIORYTET 6: unique_twist zawiera banalną domenę "' + kw + '" - zastąp niszowym twistem architektonicznym');
+        }
+      }
+    }
+    if (parsed.metadata) {
+      const validLanguages = ['TypeScript/Node.js', 'Python', 'Rust', 'Go', 'C#/.NET', 'Java', 'C++'];
+      if (parsed.metadata.language && !validLanguages.includes(parsed.metadata.language)) {
+        issues.push('Nieprawidłowy language: "' + parsed.metadata.language + '" - musi być jednym z: ' + validLanguages.join(', '));
+      }
+      if (typeof parsed.metadata.is_chaotic_user !== 'boolean') {
+        warnings.push('⚠ metadata.is_chaotic_user powinno być boolean (true/false)');
+      }
+      if (typeof parsed.metadata.is_deep_repo !== 'boolean') {
+        warnings.push('⚠ metadata.is_deep_repo powinno być boolean (true/false)');
+      }
+    }
+    return { valid: issues.length === 0, issues, warnings };
+  }
+
+  // v70.0: Hopeless example detection (rozszerzone)
+  function isHopeless(issues) {
+    const criticalCount = issues.filter(i =>
+      i.includes('messages') || i.includes('Brak pola') || i.includes('JSON error') ||
+      i.includes('Nieznane narzędzie') || i.includes('Priorytet 5') ||
+      i.includes('is_chaotic_user') || i.includes('is_deep_repo') ||
+      i.includes('ANTI-FLUFF') || i.includes('STRICT_CONSTRAINT_VIOLATION') ||
+      i.includes('FAKE_API') || i.includes('CROSS_FILE') || i.includes('DEAD_CODE') ||
+      i.includes('COMPLEXITY') || i.includes('DEP_VERSION') || i.includes('TOKEN_EFF') ||
+      i.includes('ADVERSARIAL') || i.includes('SEMANTIC_DUPLICATE')
+    ).length;
+    return criticalCount > 10;
+  }
+
+  function validateAndProcess(rawText) {
+    const rawLen = rawText.trim().length;
+    if (!rawText.trim().endsWith('}')) {
+      LOG('❌ Wykryto urwany JSON (brak zamknięcia)');
+      return { status: 'invalid', text: rawText, issues: ['INVALID_INCOMPLETE_JSON – brak końcowego }'] };
+    }
+    if (rawLen < 2500)
+      return { status: 'too_short', text: rawText, issues: ['Za krótki: ' + rawLen + ' zn.'] };
+    let parsed = null, fixed = rawText.trim(), wasFixed = false;
+    try {
+      parsed = JSON.parse(fixed);
+    } catch {
+      LOG('⚠ JSON.parse failed, auto-fix...');
+      fixed = autoFix(rawText);
+      try { parsed = JSON.parse(fixed); wasFixed = true; LOG('🔧 Auto-fix OK'); }
+      catch (e2) { return { status: 'invalid', text: rawText, issues: ['JSON error: ' + e2.message] }; }
+    }
+    const { valid, issues, warnings } = validateStructure(parsed);
+    if (valid) {
+      if (wasFixed) return { status: 'fixed', text: fixed, issues: warnings };
+      return { status: 'valid', text: fixed, issues: warnings };
+    }
+    const critical = issues.filter(i =>
+      i.includes('messages') || (i.includes('<think>') && !i.includes('długość')) ||
+      i.includes('assistant') || i.includes('Za krótki') || i.includes('Brak pola') ||
+      i.includes('Nieznane narzędzie') || i.includes('Brak arg') ||
+      i.includes('is_multi_turn:true') || i.includes('wymagany medium+') ||
+      i.includes('wymagane medium+') || i.includes('wymagane hard/extreme') ||
+      i.includes('Output za krótki') || i.includes('brak sekcji') ||
+      i.includes('Priorytet 5') || i.includes('PRIORYTET 6') ||
+      i.includes('is_chaotic_user') || i.includes('is_deep_repo') || i.includes('language') ||
+      i.includes('ANTI-FLUFF') || i.includes('STRICT_CONSTRAINT_VIOLATION') || i.includes('SYSTEM_FAILURE_VALIDATION') ||
+      i.includes('FAKE_API') || i.includes('CROSS_FILE') || i.includes('DEAD_CODE') ||
+      i.includes('COMPLEXITY') || i.includes('DEP_VERSION') || i.includes('TOKEN_EFF') ||
+      i.includes('ADVERSARIAL') || i.includes('SEMANTIC_DUPLICATE')
+    );
+    if (critical.length > 0)
+      return { status: 'invalid', text: wasFixed ? fixed : rawText, issues: [...critical, ...warnings] };
+    if (wasFixed) return { status: 'fixed', text: fixed, issues: [...issues, ...warnings] };
+    return { status: 'valid', text: fixed, issues: [...issues, ...warnings] };
+  }
+
+  // ========================== STATISTICS with localStorage (v70.0 rozszerzone) ==========================
+  const STORAGE_KEY = 'deepseek_reviewer_stats_v70';
+  const stats = {
+    total: 0, saved: 0, savedInvalid: 0, failed: 0, tooShort: 0, autoFixed: 0,
+    totalRepairTime: 0, repairsOver10s: 0, hopelessRejected: 0,
+    antiFluffRejected: 0, constraintViolations: 0, systemFailureDetected: 0,
+    // v70.0 nowe
+    fakeApiCalls: 0, crossFileInconsistencies: 0, deadCodeOccurrences: 0,
+    semanticDuplicates: 0, complexityViolations: 0, dependencyVersionIssues: 0,
+    tokenEfficiencyWarnings: 0, adversarialTestMissing: 0,
+    load() {
+      try {
+        const s = localStorage.getItem(STORAGE_KEY);
+        if (s) Object.assign(this, JSON.parse(s));
+      } catch (e) {}
+    },
+    save() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this)); } catch (e) {}
+    },
+    print() {
+      LOG('STATYSTYKI REVIEWERA v70.0 ULTIMATE');
+      LOG('Łącznie: ' + this.total + ' | ✔ ' + this.saved + ' | 🔧 ' + this.autoFixed + ' | ✕ ' + this.savedInvalid + ' | ❌ ' + this.failed);
+      LOG('⏱ Śr. czas naprawy: ' + (this.totalRepairTime / Math.max(1, this.saved)).toFixed(1) + 's | Odrzucone: ' + this.hopelessRejected);
+      LOG('🛡 Anti-Fluff: ' + this.antiFluffRejected + ' | 🔒 Constr: ' + this.constraintViolations + ' | 💥 SysFail: ' + this.systemFailureDetected);
+      LOG('v70.0: FakeAPI=' + this.fakeApiCalls + ' CrossFile=' + this.crossFileInconsistencies + ' DeadCode=' + this.deadCodeOccurrences);
+      LOG('SemDup=' + this.semanticDuplicates + ' Compl=' + this.complexityViolations + ' DepVer=' + this.dependencyVersionIssues);
+      LOG('TokenEff=' + this.tokenEfficiencyWarnings + ' AdvTest=' + this.adversarialTestMissing);
+      LOG(' ');
+    }
+  };
+
+  // ========================== SAVE & INTERCEPT (oryginalne) ==========================
+  const downloaded = new Set();
+  let _clipboardResolve = null;
+
+  function saveFile(result, rawText) {
+    if (result.status === 'too_short' || result.status === 'duplicate') return;
+    const ts = Date.now();
+    let fileContent, filename;
+    if (result.status == 'invalid') {
+      const errorHeader = result.issues.map(e => '// VALIDATION_ERROR: ' + e).join('\n');
+      fileContent = errorHeader + '\n' + rawText + '\n';
+      filename = 'REVIEWED_INVALID_' + ts + '.jsonl';
+    } else {
+      fileContent = result.text + '\n';
+      filename = 'REVIEWED_' + ts + '.jsonl';
+    }
+    const blob = new Blob([fileContent], { type: 'application/jsonl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.download = filename;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    LOG('💾 Zapisano: ' + filename);
+  }
+
+  function downloadJSONL(rawText) {
+    if (!rawText || downloaded.has(rawText)) {
+      if (_clipboardResolve) {
+        const r = _clipboardResolve;
+        _clipboardResolve = null;
+        r('skipped');
+      }
+      return;
+    }
+    downloaded.add(rawText);
+    setTimeout(() => downloaded.delete(rawText), 180000);
+    const result = validateAndProcess(rawText);
+    stats.total++;
+
+    // v69.0 stats tracking
+    if (result.issues) {
+      if (result.issues.some(i => i.includes('ANTI-FLUFF'))) stats.antiFluffRejected++;
+      if (result.issues.some(i => i.includes('STRICT_CONSTRAINT_VIOLATION'))) stats.constraintViolations++;
+      if (result.issues.some(i => i.includes('SYSTEM_FAILURE'))) stats.systemFailureDetected++;
+    }
+
+    if (result.status == 'too_short') {
+      LOG('⚠ ZA KRÓTKI');
+      stats.tooShort++; stats.savedInvalid++;
+    } else if (result.status == 'valid') {
+      LOG('✅ REVIEWED VALID (' + Math.round(result.text.length / 1024) + 'KB)');
+      if (result.issues.length) LOG(' ⚠️ ', result.issues.join(' | '));
+      stats.saved++;
+    } else if (result.status == 'fixed') {
+      LOG('🔧 REVIEWED AUTO-FIXED');
+      if (result.issues.length) LOG(' ⚠️ ', result.issues.join(' | '));
+      stats.saved++; stats.autoFixed++;
+    } else {
+      if (isHopeless(result.issues)) {
+        LOG('💀 PRZYKŁAD BEZNADZIEJNY – odrzucony bez naprawy (' + result.issues.length + ' krytycznych błędów)');
+        stats.hopelessRejected++;
+        stats.savedInvalid++;
+      } else {
+        LOG('❌ REVIEWED INVALID');
+        result.issues.forEach(i => LOG(' ❌ ' + i));
+        stats.savedInvalid++;
+        saveFile(result, rawText);
+      }
+    }
+    stats.save();
+    if (_clipboardResolve) {
+      const r = _clipboardResolve;
+      _clipboardResolve = null;
+      r(result.status);
+    }
+    stats.print();
+  }
+
+  function installClipboardInterceptor() {
+    if (navigator.clipboard._intercepted) return;
+    navigator.clipboard._intercepted = true;
+    const original = navigator.clipboard.writeText.bind(navigator.clipboard);
+    navigator.clipboard.writeText = async (text) => {
+      LOG('📦 Przechwycono - walidacja v70.0...');
+      downloadJSONL(text);
+      return original(text);
+    };
+    LOG('Interceptor v70.0 aktywny.');
+  }
+
+  function waitForClipboardCapture() {
+    return new Promise((resolve) => {
+      _clipboardResolve = resolve;
+    });
+  }
+
+  // ========================== DOM HELPERS (oryginalne) ==========================
+  function simulateClick(el) {
+    if (!el) return;
+    ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(t => el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true })));
+  }
+
+  function setTextareaValue(ta, text) {
+    if (!ta) return;
+    ta.focus();
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(ta, text);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function getTextarea() {
+    return document.querySelector('textarea');
+  }
+
+  function getSendButton() {
+    return document.querySelector('div._52c986b.ds-icon-button.ds-icon-button--l.ds-icon-button--sizing-container[role="button"]');
+  }
+
+  function isSendButtonDisabled() {
+    const btn = getSendButton();
+    if (!btn) return false;
+    return btn.getAttribute('aria-disabled') === 'true' || btn.classList.contains('ds-icon-button--disabled');
+  }
+
+  function isSendButtonActive() {
+    const btn = getSendButton();
+    if (!btn) return false;
+    return !isSendButtonDisabled();
+  }
+
+  async function waitForSendActive() {
+    while (true) {
+      if (isSendButtonActive()) return;
+      await wait(200);
+    }
+  }
+
+  async function waitForChatFinished() {
+    LOG('⏳ Czekam aż recenzent skończy (bez limitu)...');
+    const start = Date.now();
+    let lastLog = Date.now();
+    await wait(8000);
+    while (true) {
+      if (isSendButtonDisabled()) {
+        LOG('✅ Recenzent skończył! ' + Math.round((Date.now() - start) / 1000) + 's');
+        return;
+      }
+      if (Date.now() - lastLog > 30000) {
+        LOG('⏳ Wciąż generuje... ' + Math.round((Date.now() - start) / 1000) + 's) - czekam bez limitu');
+        lastLog = Date.now();
+      }
+      await wait(500);
+    }
+  }
+
+  async function scrollToBottomAndWait() {
+    const vl = document.querySelector('.ds-virtual-list');
+    if (vl) vl.scrollTop = vl.scrollHeight;
+    window.scrollTo(0, document.body.scrollHeight);
+    await wait(800);
+    if (vl) vl.scrollTop = vl.scrollHeight;
+    await wait(500);
+  }
+
+  function getLastAssistantMessage() {
+    const s = document.querySelectorAll('._4f9bf79._43c05b5');
+    if (s.length) return s[s.length - 1];
+    const g = document.querySelectorAll('[data-role="assistant"]');
+    if (g.length) return g[g.length - 1];
+    const all = document.querySelectorAll('.ds-message');
+    for (let i = all.length - 1; i >= 0; i--) {
+      if (!all[i].querySelector('.fbb737a4')) return all[i];
+    }
+    return null;
+  }
+
+  function isInsideThinking(el) {
+    return !el.closest('.ds-think-content, .e1675d8b');
+  }
+
+  function findCopyButton(msg) {
+    for (const btn of msg.querySelectorAll('button, [role="button"]')) {
+      if (isInsideThinking(btn)) continue;
+      if (btn.getAttribute('aria-disabled') === 'true') continue;
+      const txt = (btn.innerText || btn.textContent || '').trim();
+      if (txt === 'Kopiuj' || txt === 'Copy') return btn;
+    }
+    for (const btn of msg.querySelectorAll('button, [role="button"]')) {
+      if (isInsideThinking(btn)) continue;
+      if (btn.getAttribute('aria-disabled') === 'true') continue;
+      const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+      if (label.includes('kopi') || label.includes('copy')) return btn;
+    }
+    const containers = msg.querySelectorAll('[class*="action"], [class*="toolbar"], [class*="footer"], [class*="operate"]');
+    for (const c of containers) {
+      if (isInsideThinking(c)) continue;
+      const btn = c.querySelectorAll('.ds-icon-button[role="button"]:not([aria-disabled="true"])');
+      if (btn.length > 0) return btn[0];
+    }
+    return null;
+  }
+
+  async function waitForCopyButton() {
+    LOG('⏳ Czekam na przycisk kopiuj (bez limitu czasu)...');
+    let lastLog = Date.now();
+    while (true) {
+      await scrollToBottomAndWait();
+      const msg = getLastAssistantMessage();
+      if (msg) {
+        const btn = findCopyButton(msg);
+        if (btn) {
+          LOG('✅ Przycisk kopiuj znaleziony!');
+          return { msg, btn };
+        }
+      }
+      if (Date.now() - lastLog > 10000) {
+        LOG('⏳ Wciąż szukam przycisku kopiuj... (czekam bez limitu)');
+        lastLog = Date.now();
+      }
+      await wait(1000);
+    }
+  }
+
+  async function copyWithRetry() {
+    LOG('📋 Próba skopiowania odpowiedzi...');
+    const copyResult = await waitForCopyButton();
+    if (!copyResult) {
+      LOG('⚠️ Nie znaleziono przycisku kopiuj – zakładam błąd odpowiedzi, kontynuuję.');
+      return false;
+    }
+    const { btn } = copyResult;
+    LOG('🖱️ Klikam przycisk kopiuj...');
+    simulateClick(btn);
+    const capturePromise = waitForClipboardCapture();
+    LOG('⏳ Czekam na interceptor...');
+    const status = await capturePromise;
+    LOG('Interceptor zakończył: ' + status);
+    return true;
+  }
+
+  async function ensureExpertMode() {
+    const btn = document.querySelector('[data-model-type="expert"]');
+    if (!btn) return;
+    if (btn.getAttribute('aria-checked') === 'true') return;
+    simulateClick(btn);
+    await wait(500);
+  }
+
+  async function ensureToggleButtons() {
+    for (const btn of document.querySelectorAll('.ds-toggle-button')) {
+      const span = btn.querySelector('span._6dbc175');
+      if (!span) continue;
+      const text = span.innerHTML.trim();
+      if ((text === 'Głębokie myślenie' || text === 'Deep Think' || text === 'Wyszukiwanie' || text === 'Search') && btn.getAttribute('aria-pressed') !== 'true') {
+        simulateClick(btn);
+        await wait(300);
+      }
+    }
+  }
+
+  function monitorAndClickRefreshButton() {
+    const observer = new MutationObserver(() => {
+      const btn = document.querySelector('.a3b9bd76._76a2310');
+      if (btn && btn.isConnected) {
+        simulateClick(btn);
+        setTimeout(() => { if (btn.isConnected) simulateClick(btn); }, 200);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ========================== REVIEW ONE (v70.0 zaktualizowane) ==========================
+  async function reviewOne(invalidJsonl) {
+    const ta = getTextarea();
+    if (!ta) { LOG('✖ Brak textarea'); stats.failed++; stats.save(); return null; }
+
+    const preCheck = validateAndProcess(invalidJsonl);
+    if (preCheck.status === 'invalid' && isHopeless(preCheck.issues)) {
+      LOG('💀 Przykład beznadziejny – pomijam wysyłanie do AI');
+      stats.hopelessRejected++;
+      stats.savedInvalid++;
+      stats.save();
+      return 'hopeless';
+    }
+
+    const startTime = Date.now();
+
+    const prompt = `${REVIEWER_SYSTEM}
+================================================================================
+PRZYKŁAD DO NAPRAWY LUB DOKOŃCZENIA:
+================================================================================
+${invalidJsonl}
+================================================================================
+INSTRUKCJA (v70.0 ULTIMATE):
+================================================================================
+1. Oceń: kompletny ale błędny / urwany >60% / zbyt uszkodzony <40%
+2. Urwany → dokończ zachowując styl, difficulty, language, chaos/deep_repo
+3. Zbyt uszkodzony → wygeneruj świeży o tym samym difficulty/teaching_style
+4. Napraw wszystkie 6 Priorytetów
+5. Upewnij się że metadata zawiera wszystkie wymagane pola
+6. Dla is_chaotic_user:true – ask_clarification przed modyfikacjami
+7. Dla is_deep_repo:true – list_files z 40+ ścieżkami + search_code + read_file
+8. W <think> wykonaj Multi-Pass Review (PASS 1-3)
+9. SPRAWDŹ ANTI-FLUFF: żaden n-gram 5+ słów nie może się powtarzać 3+ razy w <think>
+10. ZWERYFIKUJ STRICT CONSTRAINTS
+11. ZWERYFIKUJ SYSTEM FAILURES
+12. v70.0: SPRAWDŹ FAKE API, CROSS-FILE CONSISTENCY, DEAD CODE, SEMANTIC UNIQUENESS
+13. v70.0: ZWERYFIKUJ CYCLOMATIC COMPLEXITY, DEPENDENCY VERSIONS, TOKEN EFFICIENCY, ADVERSARIAL TESTS
+14. Zwróć WYŁĄCZNIE jedną linię JSONL.`;
+
+    setTextareaValue(ta, prompt);
+    await wait(500);
+    await waitForSendActive();
+    const btn = getSendButton();
+    if (!btn) { LOG('✖ Brak przycisku send'); stats.failed++; stats.save(); return null; }
+    simulateClick(btn);
+    LOG('✈️ Wysłano do recenzenta. Czekam...');
+    await waitForChatFinished();
+    await wait(1500);
+    LOG('📋 Kopiuję odpowiedź recenzenta...');
+    await copyWithRetry();
+
+    const repairTime = (Date.now() - startTime) / 1000;
+    stats.totalRepairTime += repairTime;
+    if (repairTime > 10) stats.repairsOver10s++;
+    LOG('⏱ Czas naprawy: ' + repairTime.toFixed(1) + 's');
+
+    await wait(2000);
+    setTextareaValue(ta, '');
+    stats.save();
+    return true;
+  }
+
+  // ========================== PANEL UI (v70.0 rozszerzony) ==========================
+  function createPanel() {
+    document.getElementById('reviewer-panel')?.remove();
+    const panel = document.createElement('div');
+    panel.id = 'reviewer-panel';
+    panel.style.cssText = 'position:fixed;top:20px;right:20px;width:380px;z-index:99999;background:#1e1e2e;border:2px solid #7c3aed;border-radius:12px;padding:16px;font-family:monospace;font-size:12px;color:#e2e8f0;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="color:#a78bfa;font-weight:bold;font-size:13px">🔍 Reviewer v70.0 ULTIMATE</span>
+        <button id="rv-minimize" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px">-</button>
+      </div>
+      <div id="rv-body">
+        <div style="margin-bottom:8px;color:#94a3b8;font-size:11px">
+          Wklej <span style="color:#f59e0b">INVALID_*.jsonl</span> lub urwany plik.<br>
+          ✅ → <b>REVIEWED_*.jsonl</b> | ❌ → <b>REVIEWED_INVALID_*.jsonl</b><br>
+          <span style="color:#6366f1">v70.0: 6 Priorytetów + 8 Advanced Mechanisms</span>
+        </div>
+        <textarea id="rv-input" placeholder="Wklej tutaj INVALID lub urwany JSONL..." style="width:100%;height:120px;background:#0f0f1a;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:8px;font-size:11px;resize:vertical;box-sizing:border-box;"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="rv-fix-one" style="flex:1;background:#7c3aed;border:none;color:white;padding:8px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:12px;">🔧 Napraw / Dokończ</button>
+          <button id="rv-clear" style="background:#374151;border:none;color:#94a3b8;padding:8px;border-radius:6px;cursor:pointer;font-size:11px;">Wyczyść</button>
+        </div>
+        <div id="rv-status" style="margin-top:10px;padding:8px;background:#0f0f1a;border-radius:6px;color:#94a3b8;font-size:11px;min-height:30px;">Gotowy. Wklej INVALID lub urwany JSONL.</div>
+        <div id="rv-stats" style="margin-top:8px;font-size:10px;line-height:1.5">
+          ✔ <b id="rv-s-saved">0</b> | 🔧 <b id="rv-s-fixed">0</b> | ❌ <b id="rv-s-invalid">0</b> | 💀 <b id="rv-s-hopeless">0</b> | ✕ <b id="rv-s-failed">0</b><br>
+          ⏱ Śr: <b id="rv-s-avgtime">0s</b> | 🔥>10s: <b id="rv-s-over10">0</b><br>
+          🛡Fluff:<b id="rv-s-fluff">0</b> 🔒Constr:<b id="rv-s-constr">0</b> 💥SysFail:<b id="rv-s-sysfail">0</b><br>
+          📡FakeAPI:<b id="rv-s-fakeapi">0</b> 📁CrossFile:<b id="rv-s-crossfile">0</b> 💀DeadCode:<b id="rv-s-deadcode">0</b><br>
+          🔁SemDup:<b id="rv-s-semdup">0</b> 🌀Compl:<b id="rv-s-compl">0</b> 📦DepVer:<b id="rv-s-depver">0</b><br>
+          ⚡TokenEff:<b id="rv-s-tokeneff">0</b> 🛡AdvTest:<b id="rv-s-advtest">0</b>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    const statusEl = panel.querySelector('#rv-status');
+    const setStatus = (msg, color = '#94a3b8') => {
+      statusEl.style.color = color;
+      statusEl.textContent = msg;
+    };
+    const updateStats = () => {
+      panel.querySelector('#rv-s-saved').textContent = stats.saved;
+      panel.querySelector('#rv-s-fixed').textContent = stats.autoFixed;
+      panel.querySelector('#rv-s-invalid').textContent = stats.savedInvalid;
+      panel.querySelector('#rv-s-hopeless').textContent = stats.hopelessRejected;
+      panel.querySelector('#rv-s-failed').textContent = stats.failed;
+      const avgTime = stats.saved > 0 ? (stats.totalRepairTime / stats.saved).toFixed(1) : '0';
+      panel.querySelector('#rv-s-avgtime').textContent = avgTime + 's';
+      panel.querySelector('#rv-s-over10').textContent = stats.repairsOver10s;
+      panel.querySelector('#rv-s-fluff').textContent = stats.antiFluffRejected;
+      panel.querySelector('#rv-s-constr').textContent = stats.constraintViolations;
+      panel.querySelector('#rv-s-sysfail').textContent = stats.systemFailureDetected;
+      panel.querySelector('#rv-s-fakeapi').textContent = stats.fakeApiCalls;
+      panel.querySelector('#rv-s-crossfile').textContent = stats.crossFileInconsistencies;
+      panel.querySelector('#rv-s-deadcode').textContent = stats.deadCodeOccurrences;
+      panel.querySelector('#rv-s-semdup').textContent = stats.semanticDuplicates;
+      panel.querySelector('#rv-s-compl').textContent = stats.complexityViolations;
+      panel.querySelector('#rv-s-depver').textContent = stats.dependencyVersionIssues;
+      panel.querySelector('#rv-s-tokeneff').textContent = stats.tokenEfficiencyWarnings;
+      panel.querySelector('#rv-s-advtest').textContent = stats.adversarialTestMissing;
+    };
+
+    let minimized = false;
+    panel.querySelector('#rv-minimize').addEventListener('click', () => {
+      minimized = !minimized;
+      panel.querySelector('#rv-body').style.display = minimized ? 'none' : 'block';
+      panel.querySelector('#rv-minimize').textContent = minimized ? '+' : '-';
+    });
+    panel.querySelector('#rv-fix-one').addEventListener('click', async () => {
+      const input = panel.querySelector('#rv-input').value;
+      if (!input.trim()) {
+        setStatus('❌ Wklej JSONL do naprawy!', '#f87171');
+        return;
+      }
+      setStatus('⏳ Przetwarzam...', '#fbbf24');
+      const result = await reviewOne(input);
+      if (result === 'hopeless') {
+        setStatus('💀 Przykład beznadziejny – odrzucony.', '#ff5252');
+      } else {
+        setStatus('✅ Gotowe! Sprawdź pobrane pliki.', '#4ade80');
+      }
+      updateStats();
+    });
+    panel.querySelector('#rv-clear').addEventListener('click', () => {
+      panel.querySelector('#rv-input').value = '';
+      setStatus('🧹 Wyczyszczono.');
+    });
+    updateStats();
+  }
+
+  // ========================== INIT ==========================
+  (function init() {
+    stats.load();
+    LOG('Reviewer v70.0 ULTIMATE – AI Repair Engine + wszystkie 8 zaawansowanych mechanizmów');
+    while (!document.querySelector('textarea')) wait(1000);
+    setTimeout(() => {
+      ensureExpertMode();
+      ensureToggleButtons();
+      monitorAndClickRefreshButton();
+      installClipboardInterceptor();
+      createPanel();
+    }, 2000);
+  })();
+
+})();

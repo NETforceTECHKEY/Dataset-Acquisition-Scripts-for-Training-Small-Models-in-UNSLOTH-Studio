@@ -1,0 +1,1717 @@
+// ==UserScript==
+// @name         DeepSeek Generator v70.0 ULTIMATE – MAX QUALITY Dataset (Merged)
+// @namespace    http://tampermonkey.net/
+// @version      70.0
+// @description  ULTIMATE: wszystkie v69.0 + Fake API Detection, Cross-File Consistency, Dead Code, Semantic Duplicate, Cyclomatic Complexity, Dependency Version, Token Efficiency, Adversarial Self-Test
+// @match        https://chat.deepseek.com/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // ─────────────────────────────────────────────
+    // ANTI-DUPLICATE + ROTACJA TRACKER
+    // ─────────────────────────────────────────────
+    const seenUniqueIds = new Set();
+    const sessionHashes = new Set();
+    let lastTeachingStyle = '';
+    let lastSystemPromptVariant = 0;
+    let lastDifficulty = '';
+    let lastDomain = '';
+    let lastLanguage = '';
+
+    function simpleHash(str) {
+        let hash = 0;
+        for (let i = 0; i < Math.min(str.length, 500); i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+        }
+        return hash.toString(36);
+    }
+
+    // ─────────────────────────────────────────────
+    // SEMANTIC KEY-ROTATION – ANTI-DUPLICATE DOMAIN BAN
+    // ─────────────────────────────────────────────
+    const globalBannedKeywords = ['Auth', 'JWT', 'Middleware', 'CRUD', 'Todo', 'UserManagement', 'Blogging', 'ShoppingCard', 'PaymentGateway'];
+    let activeBannedKeywords = [];
+    const bannedKeywordCycles = {};
+
+    function updateBannedKeywords(lastGeneratedText) {
+        globalBannedKeywords.forEach(kw => {
+            if (lastGeneratedText && lastGeneratedText.includes(kw)) {
+                if (!bannedKeywordCycles[kw]) {
+                    bannedKeywordCycles[kw] = 7;
+                    LOG(`[BAN] Słowo kluczowe "${kw}" zbanowane na 7 cykli.`);
+                }
+            }
+        });
+        Object.keys(bannedKeywordCycles).forEach(kw => {
+            if (bannedKeywordCycles[kw] > 0) {
+                if (!activeBannedKeywords.includes(kw)) activeBannedKeywords.push(kw);
+            }
+        });
+        activeBannedKeywords = activeBannedKeywords.filter(kw => bannedKeywordCycles[kw] > 0);
+    }
+
+    function decrementBanCycles() {
+        Object.keys(bannedKeywordCycles).forEach(kw => {
+            if (bannedKeywordCycles[kw] > 0) {
+                bannedKeywordCycles[kw]--;
+                if (bannedKeywordCycles[kw] === 0) {
+                    LOG(`[BAN] Słowo kluczowe "${kw}" odblokowane.`);
+                }
+            }
+        });
+        activeBannedKeywords = activeBannedKeywords.filter(kw => bannedKeywordCycles[kw] > 0);
+    }
+
+    function getBanRestrictionText() {
+        if (activeBannedKeywords.length === 0) return '';
+        return `\nCRITICAL DOMAIN RESTRICTION: ABSOLUTNY ZAKAZ generowania przykładów związanych z: [${activeBannedKeywords.join(', ')}]. Jeśli zbliżysz się do tych tematów, przykład zostanie odrzucony.\n`;
+    }
+
+    // ─────────────────────────────────────────────
+    // 30 UNIQUE ARCHITECTURAL TWISTS + ROTACJA KOŁOWA (v69.0)
+    // ─────────────────────────────────────────────
+    const uniqueTwists = [
+        "zero-trust architecture with short-lived mTLS tokens and SPIFFE/SPIRE identity federation",
+        "multi-region active-active state synchronization with CRDT conflict resolution and vector clocks",
+        "eBPF-based network packet filtering inside a custom sidecar proxy with XDP acceleration",
+        "CQRS pattern with event-sourcing and eventual consistency audit trail using Apache Kafka",
+        "lock-free concurrency data structures for memory-mapped ultra-high-frequency trading engine",
+        "distributed tracing with OpenTelemetry over custom UDP multiplexer with tail-based sampling",
+        "gRPC stream throttling with dynamic token-bucket configuration in Rust tonic framework",
+        "canary isolation with automated zero-downtime database schema rollbacks using expand-contract",
+        "Linux kernel module hooks for real-time memory hardening validation with eBPF probes",
+        "homomorphic encryption-based computation on encrypted datasets without decryption",
+        "WebAssembly-based plugin sandbox with capability-based security model in server runtime",
+        "Byzantine fault-tolerant consensus with PBFT in distributed ledger without blockchain overhead",
+        "adaptive circuit breaker with ML-driven failure prediction and preemptive shedding",
+        "columnar storage engine with vectorized SIMD query execution and predicate pushdown",
+        "service mesh traffic shaping with Envoy WASM filters and dynamic rate-limit policies",
+        "reactive backpressure propagation with Project Reactor and bounded queues in microservices",
+        "hardware security module (HSM) key ceremony with quorum-based secret reconstruction",
+        "deterministic simulation testing for distributed systems with fault injection framework",
+        "custom memory allocator with NUMA-aware slab allocation for low-latency workloads",
+        "sparse tensor computation engine with COO/CSR format switching for ML inference",
+        "zero-copy IO_uring-based file server with kernel bypass and fixed buffer registration",
+        "differential privacy mechanisms with Laplace noise injection for federated analytics",
+        "content-addressable storage with Merkle DAG deduplication and garbage collection",
+        "live migration of stateful containers between nodes with CRIU checkpointing",
+        "compile-time dependency injection with type-safe capability tokens in TypeScript",
+        "probabilistic data structures (HyperLogLog, Count-Min Sketch) for real-time analytics",
+        "formal verification of concurrent algorithms using TLA+ model checking",
+        "actor model supervision trees with backoff strategies in Akka cluster sharding",
+        "multi-level cache coherence protocol with invalidation-based consistency for edge CDN",
+        "quantum-resistant cryptographic migration from RSA to Kyber lattice-based KEM"
+    ];
+
+    const usedTwists = [];
+    function getRandomTwist() {
+        if (usedTwists.length >= uniqueTwists.length) {
+            usedTwists.length = 0;
+            LOG('[TWIST] Wszystkie 30 twisów użyte – reset rotacji.');
+        }
+        const available = uniqueTwists.filter(t => !usedTwists.includes(t));
+        const chosen = available[Math.floor(Math.random() * available.length)];
+        usedTwists.push(chosen);
+        return chosen;
+    }
+
+    // ─────────────────────────────────────────────
+    // 🌍 ROTACJA JĘZYKÓW PROGRAMOWANIA (v69.0: unikanie powtórzeń)
+    // ─────────────────────────────────────────────
+    const PROGRAMMING_LANGUAGES = ['TypeScript/Node.js', 'Python', 'Rust', 'Go', 'C#/.NET', 'Java', 'C++'];
+    let currentLanguage = PROGRAMMING_LANGUAGES[0];
+
+    function getRandomLanguage() {
+        let lang;
+        do {
+            lang = PROGRAMMING_LANGUAGES[Math.floor(Math.random() * PROGRAMMING_LANGUAGES.length)];
+        } while (lang === lastLanguage && PROGRAMMING_LANGUAGES.length > 1);
+        lastLanguage = lang;
+        currentLanguage = lang;
+        return lang;
+    }
+
+    // ─────────────────────────────────────────────
+    // LAST GENERATED TEXT TRACKER (for ban detection)
+    // ─────────────────────────────────────────────
+    let lastGeneratedText = '';
+
+    // ─────────────────────────────────────────────
+    // TRYBY CYKLU (v69.0: + combo mode)
+    // ─────────────────────────────────────────────
+    let currentCycleMeta = {
+        is_chaotic_user: false,
+        is_deep_repo: false,
+        language: 'TypeScript/Node.js'
+    };
+
+    function determineCycleModes() {
+        const chaosRoll = Math.random();
+        const deepRoll = Math.random();
+        const comboRoll = Math.random();
+
+        let isChaotic = false;
+        let isDeep = false;
+
+        if (comboRoll < 0.05) {
+            isChaotic = true;
+            isDeep = true;
+        } else {
+            isChaotic = chaosRoll < 0.18;
+            isDeep = deepRoll < 0.15;
+        }
+
+        currentCycleMeta = {
+            is_chaotic_user: isChaotic,
+            is_deep_repo: isDeep,
+            language: getRandomLanguage()
+        };
+        LOG(`[MODES] Chaos:${currentCycleMeta.is_chaotic_user} DeepRepo:${currentCycleMeta.is_deep_repo} Lang:${currentCycleMeta.language}${(isChaotic && isDeep) ? ' ⚡COMBO' : ''}`);
+        return currentCycleMeta;
+    }
+
+    // ─────────────────────────────────────────────
+    // BRUTALNE OGRANICZENIA NEGATYWNE (Strict Constraints)
+    // ─────────────────────────────────────────────
+    const STRICT_CONSTRAINTS = [
+        "Napisz to, ale pamięć pomocnicza musi wynosić O(1).",
+        "Zaimplementuj to bez używania pętli for / while.",
+        "Nie możesz używać żadnych zewnętrznych bibliotek poza standardową biblioteką języka.",
+        "Kod musi przejść statyczną analizę z zerową liczbą ostrzeżeń (zero warnings).",
+        "Całe rozwiązanie nie może przekroczyć 50 linii kodu.",
+        "Rozwiązanie musi być w pełni rekurencyjne, bez zmiennych mutowalnych.",
+        "Użyj wyłącznie strumieni / generatorów – żadnych kolekcji pośrednich.",
+        "Wszystkie zapytania sieciowe muszą zakończyć się w czasie krótszym niż 100ms."
+    ];
+    
+    let lastStrictConstraint = -1;
+    function getStrictConstraint() {
+        if (Math.random() > 0.15) return '';
+        
+        let idx;
+        do {
+            idx = Math.floor(Math.random() * STRICT_CONSTRAINTS.length);
+        } while (idx === lastStrictConstraint && STRICT_CONSTRAINTS.length > 1);
+        
+        lastStrictConstraint = idx;
+        return `\n================================================================================\nBRUTALNE OGRANICZENIE ALGORYTMICZNE (STRICT CONSTRAINT)\n================================================================================\n${STRICT_CONSTRAINTS[idx]}\nMusisz dostosować całą implementację do tego ograniczenia.\n================================================================================\n`;
+    }
+
+    // ─────────────────────────────────────────────
+    // SYMULACJA AWARII ŚRODOWISKA (System-Level Failures)
+    // ─────────────────────────────────────────────
+    function getSystemFailureInstruction() {
+        if (Math.random() > 0.12) return '';
+        
+        const failures = [
+            "Segmentation fault (core dumped) przy próbie alokacji dużej tablicy",
+            "Out of memory (OOM) kill – proces zabity przez kernel",
+            "Connection timed out po 30 sekundach oczekiwania",
+            "Disk quota exceeded – brak miejsca na dysku",
+            "Too many open files – limit deskryptorów przekroczony",
+            "Resource temporarily unavailable (EAGAIN)"
+        ];
+        const chosenFailure = failures[Math.floor(Math.random() * failures.length)];
+        
+        return `\n================================================================================\nSYMULACJA AWARII ŚRODOWISKA (SYSTEM-LEVEL FAILURE)\n================================================================================\nW jednym z <tool_response> dla run_tests lub execute_command MUSISZ zasymulować awarię systemową: "${chosenFailure}".\nAgent musi wtedy zareagować jak sysadmin – zdiagnozować problem na poziomie systemu, a nie tylko kodu.\nMoże to wymagać zmiany alokacji pamięci, dodania retry, obsługi timeoutów lub restrukturyzacji operacji I/O.\n================================================================================\n`;
+    }
+
+    // ─────────────────────────────────────────────
+    // NOWE MECHANIZMY v70.0 (1-8) – INSTRUKCJE DO PROMPTA
+    // ─────────────────────────────────────────────
+    function getAdvancedQualityInstructions() {
+        return `
+================================================================================
+v70.0 ADVANCED QUALITY MECHANISMS (MANDATORY)
+================================================================================
+1. API VERIFICATION: Używaj tylko istniejących funkcji z bibliotek standardowych lub zdefiniowanych w projekcie. Każda importowana funkcja musi faktycznie istnieć w danym module/bibliotece. Zakaz halucynowania nieistniejących metod.
+2. CROSS-FILE CONSISTENCY: Wszystkie importy i wywołania międzyp likowe muszą być spójne – funkcja wywoływana w jednym pliku musi być zdefiniowana w drugim z tą samą sygnaturą.
+3. DEAD CODE ELIMINATION: Nie generuj nieużywanych funkcji, zmiennych ani stałych. Każdy zdefiniowany element musi być faktycznie wykorzystany w logice biznesowej lub testach.
+4. SEMANTIC UNIQUENESS: Unikaj powtarzania tych samych schematów architektonicznych – każdy przykład musi wnosić nowy wzorzec (nie tylko zmiana nazw zmiennych).
+5. CYCLOMATIC COMPLEXITY: Dostosuj złożoność kodu do poziomu trudności: easy 1-4, medium 5-12, hard 13-25, extreme 26+ (przybliżona liczba gałęzi warunkowych + pętli + 1).
+6. DEPENDENCY VERSION REALISM: Wszelkie deklarowane wersje bibliotek (package.json, requirements.txt, Cargo.toml) muszą być realne i zgodne z użytym API.
+7. TOKEN EFFICIENCY: Kod musi być zwięzły – unikaj rozwlekłych implementacji, które można zastąpić krótszymi, idiomatycznymi konstrukcjami. Stosunek istotnych operacji (endpointy, zapytania DB, testy) do tokenów powinien być wysoki.
+8. ADVERSARIAL SELF-TEST: W testach jednostkowych dodaj 1-2 przypadki brzegowe, które mogłyby potencjalnie złamać kod (np. puste wejście, ekstremalne wartości, nieoczekiwane typy).
+================================================================================
+`;
+    }
+
+    // ─────────────────────────────────────────────
+    // DYNAMIC PROMPT BUILDER (v70.0: dodane instrukcje zaawansowane)
+    // ─────────────────────────────────────────────
+    function buildPromptText(meta, cycleCount) {
+        const banRestriction = getBanRestrictionText();
+        const selectedTwist = getRandomTwist();
+        const isNegative = Math.random() < 0.20;
+        const isHardMultiTurn = Math.random() < 0.40;
+
+        const freshnessEnforcement = (cycleCount % 50 === 0 && cycleCount > 0)
+            ? `\n🔥 FRESHNESS ENFORCEMENT (co 50 cykli): Ten przykład MUSI być w DOMENIE innej niż ostatnie 5 użytych. Wprowadź zupełnie nową kombinację języka+domeny+twistu. Unikaj patternów z ostatnich 10 cykli.\n`
+            : '';
+
+        const negativeInstruction = isNegative
+            ? `\nOBLIGATORY NEGATIVE EXAMPLE PATTERN: W pierwszej turze ReAct Twój agent MUSI popełnić subtelny, trudny do wykrycia błąd logiczny, architektoniczny lub bezpieczeństwa (np. race condition lub pominięcie sanityzacji wejścia w niszowym edge-case). Błąd ten musi zostać jawnie ujawniony i zwrócony w pierwszej symulowanej odpowiedzi <tool_response> (np. crash testu lub alert z run_security_scan). W kolejnej turze agent musi przeanalizować błąd w sekcji <think> i bezbłędnie go naprawić. Ustaw metadata.is_negative_example: true.\n`
+            : `\nUstaw metadata.is_negative_example: false.\n`;
+
+        const hardMultiTurnInstruction = isHardMultiTurn
+            ? `\nMULTI-TURN HARD/EXTREME MANDATE: Dla poziomów trudności 'hard' i 'extreme' – scenariusz MUSI być wieloturowy (is_multi_turn: true) i wymagać od 3 do 5 unikalnych, następujących po sobie interakcji z narzędziami (tool_calls), gdzie każda kolejna tura zależy od wyników poprzedniej.\n`
+            : '';
+
+        const qualityRestrictions = `
+================================================================================
+CRITICAL QUALITY RESTRICTIONS
+================================================================================
+ZERO boilerplate comments w wygenerowanym kodzie (kategoryczny zakaz komentarzy typu '// import express', '// handle error here', '// logic goes here', '// TODO'). Kod musi być w 100% produkcyjny, kompletny i samo-wyjaśniający się poprzez nazewnictwo i strukturę.
+ZERO nadmiernego logowania produkcyjnego: kategoryczny zakaz używania masowych console.log() / print() do debugowania stanu. Używaj wyłącznie ustrukturyzowanych loggerów biznesowych (np. pino, winston ze structured fields) lub natywnych struktur zwracanych przez narzędzia.
+ABSOLUTNY nakaz stosowania rygorystycznego, domenowego nazewnictwa zmiennych i funkcji: zakaz stosowania nazw 'data', 'temp', 'obj', 'handler1', 'result2', 'helper'. Każda nazwa musi jednoznacznie opisywać domenę biznesową lub techniczną rolę.
+================================================================================
+`;
+
+        const languageInstruction = `
+================================================================================
+MANDATORY PROGRAMMING LANGUAGE
+================================================================================
+Cały kod MUSI być napisany w języku: ${meta.language}
+W metadata.language zapisz dokładnie: "${meta.language}".
+Wszystkie przykłady kodu, konfiguracje i testy muszą być w tym języku.
+================================================================================
+`;
+
+        const chaoticInstruction = meta.is_chaotic_user ? `
+================================================================================
+CHAOTIC USER MODE (is_chaotic_user: true)
+================================================================================
+Wiadomość użytkownika (user) inicjująca zadanie MUSI być niekompletna, chaotyczna, zawierać żargon biznesowy lub literówki. 
+Agent MUSI w pierwszej turze użyć narzędzia ask_clarification, aby wydobyć pełne wymagania przed przejściem do działania.
+Nie generuj kompletnego rozwiązania przed uzyskaniem wyjaśnień od użytkownika.
+================================================================================
+` : '';
+
+        const deepRepoInstruction = meta.is_deep_repo ? `
+================================================================================
+DEEP REPO MODE (is_deep_repo: true)
+================================================================================
+Zadanie NIE polega na stworzeniu plików od zera. 
+W pierwszej turze <tool_response> MUSI symulować wyjście z narzędzia list_files pokazujące architekturę minimum 40 plików w dużym monorepo.
+Agent musi użyć search_code i read_file, aby dokonać precyzyjnego refactoringu w wielu głęboko zagnieżdżonych plikach, a NIE budować projekt od nowa.
+W metadata.is_deep_repo ustaw true.
+================================================================================
+` : '';
+
+        const comboInstruction = (meta.is_chaotic_user && meta.is_deep_repo) ? `
+================================================================================
+⚡ COMBO MODE: CHAOTIC USER + DEEP REPO
+================================================================================
+Połącz oba wymagania: user pisze chaotyczną wiadomość o refactoringu w dużym monorepo (40+ plików).
+Agent najpierw używa ask_clarification by zrozumieć o co chodzi, potem list_files by poznać strukturę,
+a następnie search_code + read_file + replace_in_file by wykonać precyzyjny refactoring.
+To rzadki, wysoko-wartościowy edge-case treningowy.
+================================================================================
+` : '';
+
+        const twistInstruction = `
+================================================================================
+MANDATORY ARCHITECTURAL TWIST DLA TEGO CYKLU
+================================================================================
+Całe wygenerowane zadanie i rozwiązanie MUSI być zbudowane wokół następującego niszowego twistu architektonicznego:
+"${selectedTwist}"
+Umieść dokładnie tę wartość w polu metadata.unique_twist. Scenariusz musi demonstrować głęboką wiedzę o tym twiście – nie jako dekorację, lecz jako rdzeń całego rozwiązania.
+================================================================================
+`;
+
+        const strictConstraintText = getStrictConstraint();
+        const systemFailureText = getSystemFailureInstruction();
+        const advancedQualityText = getAdvancedQualityInstructions();
+
+        return `Jesteś ZESPOŁEM 4 EKSPERTÓW pracujących razem nad każdym przykładem:
+1. Principal AI Engineer (architektura, SOLID, czystość kodu, anty-overfitting)
+2. Senior Security Engineer (OWASP 2026, CWE, hardening, threat modeling)
+3. Staff SRE (observability, rollback, circuit breakers, scalability 50k→100k)
+4. Expert Unsloth Trainer (diversity, realism, self-correction, multi-turn)
+
+Każdy przykład ma być całkowicie nowy i unikalny. Nigdy nie powtarzaj projektów, architektur, nazw plików ani funkcjonalności z poprzednich przykładów w tej sesji. Zawsze wprowadzaj świeżą koncepcję i twist.
+
+⭐ TWOIM CELEM jest wygenerowanie przykładu tak doskonałego, że Claude Opus 4.7 / DeepSeek V4 Pro oceni go jako "excellent training example" z notą 9.6+/10. Jakość > ilość.
+
+Bądź maksymalnie kreatywny i oryginalny. Twórz eleganckie, nowoczesne rozwiązania enterprise-grade.
+Tworzycie dane treningowe w formacie JSONL dla Unsloth do fine-tuningu 35B modelu, który ma być najlepszym lokalnym agentycznym programistą na świecie – przewyższającym Claude Opus 4.7 i DeepSeek V4 w kodowaniu enterprise w 2026 roku.
+${banRestriction}${twistInstruction}${negativeInstruction}${hardMultiTurnInstruction}${languageInstruction}${chaoticInstruction}${deepRepoInstruction}${comboInstruction}${freshnessEnforcement}${strictConstraintText}${systemFailureText}${advancedQualityText}${qualityRestrictions}
+================================================================================
+CRITICAL BEHAVIOR: BEZWZGLĘDNA ZASADA UNIKANIA BŁĘDÓW SKŁADNIOWYCH JSON (ANTI-JSON-ERROR)
+================================================================================
+Aby zapobiec krytycznemu błędowi: "JSON error: Expected ',' or '}' after property value", MUSISZ bezwzględnie przestrzegać poniższych reguł formatowania i ucieczkowania znaków:
+
+1. KAŻDY wewnętrzny cudzysłów (") użyty wewnątrz dowolnego pola tekstowego (np. wewnątrz wygenerowanego kodu źródłowego, komunikatów string, logów, konfiguracji czy opisów) MUSI być bezwzględnie ucieczkowany przy użyciu ukośnika: \\".
+   - ZŁY PRZYKŁAD: "content": "print("Hello World")" -> powoduje crash parsera JSON!
+   - DOBRY PRZYKŁAD: "content": "print(\\"Hello World\\")" -> w pełni poprawny!
+
+2. Wewnątrz generowanego kodu (Python, JS, C#, Go, C++ itp.) bezwzględnie zaleca się używanie pojedynczych apostrofów (') zamiast cudzysłowów (") dla literałów tekstowych. To całkowicie eliminuje ryzyko wystąpienia błędu składniowego w pliku wyjściowym .jsonl.
+
+3. Wszystkie znaki nowej linii w polach "content" lub "think" MUSZĄ być zapisane jako dosłowne dwie litery: \\n. Cały obiekt wyjściowy musi znajdować się w JEDNEJ, nieprzerwanej linii tekstu. Upewnij się, że cały tekst assistant.content nie zawiera ani jednego fizycznego znaku nowej linii, a wszystkie przejścia do nowego wiersza są reprezentowane wyłącznie przez ciąg tekstowy \\n.
+
+4. Każdy otwarty nawias klamrowy { i kwadratowy [ musi zostać idealnie domknięty. Każdy klucz i wartość w obiekcie musi być oddzielony przecinkiem, a po ostatnim elemencie obiektu NIE MOŻE być przecinka.
+
+5. UJEDNOLICONY I BEZWZGLĘDNIE OBOWIĄZUJĄCY FORMAT WYWOŁAŃ NARZĘDZI (tool_calls): Jedynym dopuszczalnym formatem wywołania narzędzia w assistant.content jest tag XML z atrybutem name:
+   <tool_call name="nazwa_narzedzia"><args>{"klucz": "wartosc"}</args></tool_call>
+   Ten format obowiązuje dla WSZYSTKICH 4 wariantów systemowych agenta oraz wszystkich reguł zachowania. Jest to jedyny zatwierdzony standard – nie wolno używać żadnego innego formatu, w szczególności zagnieżdżonego obiektu JSON wewnątrz tagów <tool_call> bez atrybutu name.
+
+6. POWIĄZANIE ANTI-JSON-ERROR Z JSONL SELF-CHECK: Przed ostatecznym wypluciem linii danych MUSISZ przeprowadzić wewnętrzny proces samokontroli opisany w sekcji "## 4. JSONL Self-Check" wewnątrz bloku <think>. Zasady unikania błędów składniowych z punktów 1-5 powyżej są bezpośrednio weryfikowane w tym kroku – żadna linia JSONL nie może zostać zwrócona bez uprzedniej weryfikacji w sekcji Self-Check.
+
+================================================================================
+FORMAT JSONL
+================================================================================
+KAŻDA LINIA MUSI WYGLĄDAĆ DOKŁADNIE TAK (jedna linia JSONL):
+{"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}, {"role": "assistant", "content": "<think>\\n...chain of thought...\\n</think>\\n\\n...actual output with tool calls..."}], "metadata": {"unique_id": "uuid-v4-style", "category": "...", "difficulty": "...", "project_type": "...", "instruction_format": "...", "is_negative_example": false, "is_multi_turn": false, "teaching_style": "...", "unique_twist": "...", "system_prompt_variant": 1, "tools_used": ["read_file","write_file","git_commit"], "estimated_tokens": 1200, "domain": "...", "language": "Python", "is_chaotic_user": false, "is_deep_repo": false}}
+
+METADANE OBOWIĄZKOWE:
+- unique_id: losowy string UUID-style (np. "a3f7c2d1-9b4e-4f2a-8c3d-1e5b6f7a8d9c")
+- teaching_style (concise/verbose/ascii_diagrams/decision_tree/table_driven) – ROTUJ
+- unique_twist: MUSI zawierać dokładnie twist wylosowany dla tego cyklu (patrz sekcja MANDATORY ARCHITECTURAL TWIST powyżej)
+- domain: frontend/backend/fullstack/devops/security/database/mobile/cli/ml-ops
+- tools_used: lista faktycznie użytych narzędzi
+- estimated_tokens: przybliżona liczba tokenów w assistant.content
+- is_multi_turn (~20-25%, dla hard/extreme min 40% gdy wylosowano)
+- system_prompt_variant (1-4)
+- language: jeden z [TypeScript/Node.js, Python, Rust, Go, C#/.NET, Java, C++]
+- is_chaotic_user: true/false (jeśli true, wymagane ask_clarification przed modyfikacjami)
+- is_deep_repo: true/false (jeśli true, wymagane symulowane list_files z 40+ plikami)
+
+ABSOLUTNY ZAKAZ: używania zewnętrznego markdownu poza strukturą JSON (np. bloków \`\`\`json). Całość musi być czystym tekstem JSONL.
+Wszystkie znaki nowej linii w wartościach JSON = \\n
+
+================================================================================
+ROTACJA SYSTEM PROMPTÓW AGENTA (4 warianty)
+================================================================================
+WARIANT 1 – "Pragmatyczny Senior" (40%):
+"You are an elite agentic software engineer running inside Open Code / LM Studio on the user's local machine. You have full access to: filesystem, terminal, git, browser via MCP, Docker, databases, and LSP. You operate in a strict ReAct loop: Reason → Act (tool call) → Observe (tool response) → Reason → Act... repeat until task is complete and verified. CORE RULES: (1) NEVER hallucinate file contents – always read_file before modifying. (2) NEVER hardcode secrets – use env vars validated with zod/class-validator/go-playground. (3) ALWAYS run_tests before git_commit – never commit broken code. (4) On tool error: retry max 3x, then try alternative strategy, then ask_clarification. (5) Format ALL tool calls using the unified XML standard with name attribute: <tool_call name=\"tool_name\"><args>{\"key\": \"value\"}</args></tool_call> and WAIT for actual tool response from the system – NEVER generate <tool_response> yourself during INFERENCE. The system injects <tool_response>{\"result\": ...}</tool_response> after execution. (6) Apply SOLID, DRY, clean architecture, WCAG 2.2 AA. (7) Every commit must follow Conventional Commits: feat/fix/refactor/test/chore/docs: description."
+
+WARIANT 2 – "Architekt z Obsesją Jakości" (25%):
+"You are a Principal Software Architect with 20 years of experience in mission-critical systems. Your thinking process: First Principles → Trade-off Analysis → Minimal Viable Architecture → Iterative Refinement. PHILOSOPHY: (1) Simplicity over cleverness – code is read 100x more than written. (2) Explicit > Implicit – no magic, no hidden behavior. (3) Fail fast, fail loud – validate inputs at boundaries. (4) Composition > Inheritance – prefer pure functions and dependency injection. (5) Test behavior, not implementation. Full ReAct loop with unified XML tool calls: <tool_call name=\"tool_name\"><args>{\"key\": \"value\"}</args></tool_call>. Always run_security_scan and run_static_analysis before committing."
+
+WARIANT 3 – "SRE-First Pragmatist" (20%):
+"You are a Staff SRE turned Software Engineer. Every line of code ships to production serving 100k+ users. MINDSET: (1) If it's not observable, it doesn't exist – structured JSON logging, metrics, tracing. (2) Everything fails eventually – circuit breakers, retry with exponential backoff + jitter, graceful degradation. (3) Zero-downtime deployments only – feature flags, canary, rollback plan. (4) Security is reliability. (5) Optimize based on data – profile first. Full ReAct loop. Format ALL tool calls as: <tool_call name=\"tool_name\"><args>{\"key\": \"value\"}</args></tool_call>. NEVER generate <tool_response> yourself during INFERENCE."
+
+WARIANT 4 – "Security-First Hardener" (15%):
+"You are a Senior Security Engineer. Threat-model EVERY change. OWASP 2026, CWE/SANS Top 25, ASVS Level 2. Defense in depth, least privilege, run_security_scan before EVERY commit. WCAG 2.2 AA. Rate limit, audit log, monitor every sensitive endpoint. Dependency CVE scanning every build. Full ReAct loop. Format ALL tool calls as: <tool_call name=\"tool_name\"><args>{\"key\": \"value\"}</args></tool_call>. NEVER generate <tool_response> yourself during INFERENCE."
+
+ZAPISZ numer wariantu w metadata.system_prompt_variant.
+
+================================================================================
+MYŚLENIE I WYJŚCIE
+================================================================================
+Zawsze zaczynaj od <think>...</think> z rozbudowaną analizą.
+
+W <think> zawrzyj OBOWIĄZKOWO dokładnie 4 następujące nagłówki markdown (to naturalnie wydłuży odpowiedź i podniesie jej merytorykę):
+
+## 1. Architektura i Ograniczenia
+- Analiza wymagań i potencjalnych problemów
+- Wybór architektury z uzasadnieniem trade-offs
+
+## 2. Threat Modeling
+- Security threat model
+- OWASP top zagrożenia dla tego przypadku
+
+## 3. Strategia ReAct
+- Plan ReAct (lista kroków tool calls)
+- Antycypacja błędów i recovery plan
+- Dlaczego ten przykład jest unikalny
+
+## 4. JSONL Self-Check
+- W tej sekcji OBOWIĄZKOWO zasymuluj parsowanie własnego wyjściowego JSON-a. Jawnie napisz tekst w stylu: "Weryfikuję strukturę: wszystkie wewnętrzne cudzysłowy w kodzie zostały zastąpione apostrofami lub ucieczkowane jako \\", nawiasy są domknięte, brak fizycznych znaków nowej linii, wyjściowy obiekt zostanie zapisany w dokładnie jednej linii z zachowaniem standardu narzędzi <tool_call name=\"...\">".
+- Sprawdź każdy z 6 punktów sekcji ANTI-JSON-ERROR przed wygenerowaniem finalnej linii JSONL.
+- Potwierdź że format tool_call używa atrybutu name, a nie zagnieżdżonego JSON bez atrybutu.
+
+ROTACJA TEACHING STYLE + POZIOMY TRUDNOŚCI:
+╔═══════════╦══════════════╦══════════════════════════════════════════════════╗
+║ DIFFICULTY║ TOKENY OUTPUT║ WYMAGANIA                                        ║
+╠═══════════╬══════════════╬══════════════════════════════════════════════════╣
+║ easy      ║ 150-400      ║ Context discovery, plan, 1-2 ryzyka, min 2 testy ║
+║           ║              ║ git_commit OPCJONALNY                             ║
+╠═══════════╬══════════════╬══════════════════════════════════════════════════╣
+║ medium    ║ 400-800      ║ + business context, ADR min 2 alt, cross-file,   ║
+║           ║              ║ rollback, min 3 testy, error recovery             ║
+╠═══════════╬══════════════╬══════════════════════════════════════════════════╣
+║ hard      ║ 800-1400     ║ + ADR min 3 alt, risk matrix min 5, min 5 testy, ║
+║           ║              ║ OWASP top 10, performance profiling               ║
+╠═══════════╬══════════════╬══════════════════════════════════════════════════╣
+║ extreme   ║ 1400-2200+   ║ + future-proofing, scalability, WCAG 2.2 AA,     ║
+║           ║              ║ profiling, cold start, feature flags, K8s         ║
+╚═══════════╩══════════════╩══════════════════════════════════════════════════╝
+
+Rozkład docelowy: easy 15% | medium 35% | hard 35% | extreme 15%
+ANTY-OVERFITTING: Rotuj teaching_style, difficulty, system_prompt_variant – nigdy dwa takie same pod rząd.
+
+Po </think> generuj PEŁNY ReAct loop z:
+✅ Realistycznymi <tool_response> (symuluj prawdziwe odpowiedzi systemu – w treningu MUSISZ je generować)
+✅ Pełny kod plików (nie skracaj, nie używaj TODO ani placeholder)
+✅ Testy jednostkowe i integracyjne
+✅ Conventional Commits
+✅ Komentarze wyjaśniające decyzje architektoniczne
+
+KRYTYCZNE: Mimo że system prompt agenta mówi "NEVER generate <tool_response> during INFERENCE", w przykładach TRENINGOWYCH MUSISZ symulować pełny ReAct loop z realistycznymi <tool_response>.
+Model uczy się wzorca Reason→Act→Observe. <tool_response> MUSI być realistyczny:
+- list_files → lista ścieżek
+- run_tests → "PASS: 5 tests (2.3s)" lub konkretny błąd
+- git_commit → "[main a3f2c1b] feat(auth): add JWT middleware"
+- run_security_scan → "No critical CVEs found" lub lista CVE
+
+================================================================================
+TOOL FIDELITY (2026) – PEŁNA LISTA NARZĘDZI
+================================================================================
+Przed każdym <tool_call> zweryfikuj: nazwę, wymagane argumenty, typy.
+NIGDY nie używaj narzędzi spoza tej listy. {} = wymagane, [] = opcjonalne.
+
+── FILESYSTEM ──────────────────────────────────────────────────────────────
+read_file({path})
+write_file({path, content})
+replace_in_file({path, old_str, new_str})
+delete_file({path})
+create_directory({path})
+move_file({src_path, dst_path})
+copy_file({src_path, dst_path})
+list_files({path, depth})
+search_code({regex, path})
+file_diff({path_a, path_b})
+
+── TERMINAL / SYSTEM ────────────────────────────────────────────────────────
+execute_command({command, cwd}, [timeout_ms], [env])
+get_env_info()
+env_get({key})
+env_set({key, value, scope: "session"|"project"})
+check_port({port})
+kill_process_on_port({port})
+ssh_exec({host, user, command}, [key_path])
+http_request({method: "GET"|"POST"|"PUT"|"PATCH"|"DELETE", url}, [headers], [body], [timeout_ms])
+cron_job_create({name, schedule, command, cwd})
+cron_job_list()
+
+── GIT ──────────────────────────────────────────────────────────────────────
+git_status({repo_path})
+git_diff({repo_path}, [file])
+git_add({repo_path, files[]})
+git_commit({repo_path, message})
+git_create_branch({repo_path, name})
+git_checkout({repo_path, branch_or_commit})
+git_push({repo_path, remote, branch})
+git_pull({repo_path, remote, branch})
+git_resolve_conflict({repo_path, file, strategy: "ours"|"theirs"|"manual"})
+git_stash({repo_path})
+git_stash_pop({repo_path})
+git_tag({repo_path, tag}, [message])
+git_log({repo_path}, [limit])
+
+── TESTY I JAKOŚĆ KODU ──────────────────────────────────────────────────────
+run_tests([path], [coverage], [watch])
+run_linter([path], [fix])
+run_static_analysis([path], [strict])
+run_playwright_test([test], [headed], [browser])
+screenshot_compare([baseline], [threshold])
+check_wcag([url], [level: "A"|"AA"|"AAA"])
+run_security_scan({path}, [severity: "LOW"|"MEDIUM"|"HIGH"|"CRITICAL"])
+run_profiler({path}, [duration_ms], [type: "cpu"|"memory"|"io"])
+run_load_test([endpoint], [duration], [vus], [rps])
+
+── DOCKER ───────────────────────────────────────────────────────────────────
+docker_build([tag], [dockerfile], [context], [args])
+docker_run([image], [ports], [env], [volumes], [detach])
+docker_compose_up([file], [services], [detach])
+docker_compose_down([file], [volumes])
+docker_logs([container], [tail], [follow])
+docker_exec({container, command})
+docker_inspect({container})
+docker_image_scan({image})
+
+── BAZY DANYCH ──────────────────────────────────────────────────────────────
+db_query({query}, [params], [connection])
+db_migrate([direction], [steps], [dry_run])
+db_schema_inspect([table], [include_indexes])
+db_explain({query}, [analyze])
+db_seed([file], [truncate])
+db_backup({output_path}, [compress])
+db_restore({input_path})
+
+── CACHE / KOLEJKI ──────────────────────────────────────────────────────────
+redis_get({key}, [connection])
+redis_set({key, value}, [ttl_seconds], [connection])
+redis_del({key}, [connection])
+redis_flush([pattern], [connection])
+kafka_publish({topic, message}, [partition_key])
+kafka_consume({topic, group_id}, [max_messages], [timeout_ms])
+kafka_topic_create({name}, [partitions], [replication_factor])
+
+── CLOUD / INFRASTRUKTURA ───────────────────────────────────────────────────
+cloud_deploy({provider: "aws"|"gcp"|"azure"|"vercel"|"fly", config})
+cloud_logs({provider, service}, [tail], [filter])
+cloud_secret_get({provider: "vault"|"aws-sm"|"gcp-sm", secret_name})
+cloud_secret_set({provider, secret_name, value})
+cloud_storage_upload({provider: "s3"|"gcs"|"azure-blob", bucket, local_path, remote_path})
+cloud_storage_download({provider, bucket, remote_path, local_path})
+cloud_cdn_invalidate({provider: "cloudfront"|"cloudflare", paths[]})
+
+── KUBERNETES ───────────────────────────────────────────────────────────────
+k8s_apply({file}, [namespace], [dry_run])
+k8s_get_pods([namespace], [label_selector])
+k8s_logs({pod}, [namespace], [container], [tail])
+k8s_rollback({deployment}, [namespace], [revision])
+k8s_scale({deployment, replicas}, [namespace])
+k8s_exec({pod, command}, [namespace])
+k8s_port_forward({pod, local_port, pod_port}, [namespace])
+
+── FEATURE FLAGS ────────────────────────────────────────────────────────────
+feature_flag_create({name, description}, [enabled], [rollout_percent])
+feature_flag_update({name, enabled}, [rollout_percent], [user_targets[]])
+feature_flag_list()
+
+── PRZEGLĄDARKA / MCP ───────────────────────────────────────────────────────
+browse_web({url}, [wait_for], [javascript])
+mcp_search({query}, [max_results])
+mcp_fetch_section({url, selector})
+preview_url({url}, [viewport])
+
+── LSP / DEBUGGER ───────────────────────────────────────────────────────────
+lsp_go_to_definition({file, line, character})
+lsp_find_references({file, line, character})
+lsp_rename_symbol({file, line, character, newName})
+lsp_get_diagnostics([file])
+dap_set_breakpoint({file, line}, [condition])
+dap_inspect_variable({name}, [scope: "local"|"global"])
+dap_step_over()
+dap_step_into()
+dap_continue()
+dap_evaluate({expression})
+
+── INNE ─────────────────────────────────────────────────────────────────────
+ask_clarification({question}, [options[]])
+notify({message}, [level: "info"|"success"|"warning"|"error"])
+dependency_check({package}, [version], [ecosystem: "npm"|"pip"|"cargo"|"go"|"maven"])
+
+================================================================================
+WYMAGANE PATTERNS W KAŻDYM PRZYKŁADZIE
+================================================================================
+1. ERROR RECOVERY: min 1 retry lub fallback po błędzie tool
+2. VALIDATION: walidacja inputów na granicy systemu (zod/pydantic/class-validator/go-playground)
+3. SECURITY: min 1 security check (scan, parameterized query, env vars, dependency_check)
+4. OBSERVABILITY: structured logging z correlation ID LUB metrics
+5. TESTS: minimum 2 testy (unit + integration lub e2e)
+6. CONVENTIONAL COMMIT: każdy commit z typem i scope
+
+ERROR RECOVERY PATTERNS (rotuj między przykładami):
+- Retry z exponential backoff: 1s → 2s → 4s, max 3 próby
+- Fallback strategy: jeśli tool A zawiedzie → użyj tool B
+- Circuit breaker: po N błędach zatrzymaj i zaraportuj
+- Graceful degradation: wróć do ostatniego działającego stanu
+- SELF-CORRECTION: model wykrywa błąd w tool_response i koryguje plan
+
+================================================================================
+STRUKTURA OUTPUTU I MULTI-TURN
+================================================================================
+1. Jedno zdanie planu działania.
+2. ReAct loop: [Reasoning] → <tool_call name="..."><args>...</args></tool_call> → <tool_response> → [Obserwacja] → repeat
+3. Pliki: // FILE: ścieżka/do/pliku.ext (min. 2-5 zależnie od difficulty)
+4. run_tests (OBOWIĄZKOWE medium+, opcjonalne easy)
+5. git_commit (OBOWIĄZKOWE medium+, opcjonalne easy)
+6. hard/extreme: run_security_scan + BENCHMARK
+
+MULTI-TURN (~20-25%, dla hard/extreme min 40%):
+- Użyj ---TURN_BREAK--- między turami
+- Każda tura ma własny <think>...</think>
+- Tura 2+ referuje wyniki poprzedniej
+- Min 2 tury, max 5 (dla hard/extreme wymagane 3-5 unikalnych interakcji z narzędziami)
+
+NEGATIVE EXAMPLES (~20%, is_negative_example: true):
+- W <think>: [INCORRECT-PLAN-START] → błąd → [INCORRECT-PLAN-END] → [SELF-CORRECTION] → [CORRECTED-PLAN]
+- Błędy: SQL Injection, XSS, IDOR, Hardcoded Secret, CORS *, JWT alg=none, Race Condition, SSRF, Path Traversal, Command Injection
+- Błąd musi być ujawniony przez <tool_response> (crash testu lub alert security scan)
+- Kolejna tura: analiza w <think> i bezbłędna naprawa
+
+SELF-CORRECTION PATTERN (~15%):
+- Model popełnia błąd w pierwszym tool call
+- Obserwuje błąd w tool_response
+- Koryguje plan – komentarz: // SELF-CORRECTION:
+
+================================================================================
+JSONL SELF-CHECK PRZED WYGENEROWANIEM OUTPUTU
+================================================================================
+1. Wszystkie " escape'owane jako \\"?
+2. \\n zamiast realnych enterów w JSON?
+3. Jedna linia JSON? Zero realnych enterów?
+4. Metadata kompletne?
+5. teaching_style ≠ poprzedni przykład?
+6. system_prompt_variant ≠ poprzedni?
+7. is_multi_turn ↔ ---TURN_BREAK--- zgodne?
+8. Tool arguments poprawne?
+9. <tool_response> realistyczne?
+10. Zero TODO/placeholder?
+11. medium+: git_commit i run_tests obecne?
+12. hard/extreme: run_security_scan obecne?
+13. unique_id obecny (UUID-style, min 8 znaków)?
+14. tools_used to tablica?
+15. estimated_tokens to liczba całkowita?
+16. domain to jedna z: frontend/backend/fullstack/devops/security/database/mobile/cli/ml-ops?
+17. Upewnij się że cały tekst assistant.content nie zawiera ani jednego fizycznego znaku nowej linii – tylko \\n.
+18. Czy format tool_call używa atrybutu name: <tool_call name="..."> a nie zagnieżdżonego JSON bez atrybutu?
+19. Czy w sekcji ## 4. JSONL Self-Check w bloku <think> potwierdzono poprawność struktury?
+20. Czy unique_twist zawiera dokładnie wylosowany twist dla tego cyklu?
+21. Czy kod jest wolny od boilerplate comments i nadmiernego console.log()?
+22. Czy nazewnictwo zmiennych jest domenowe (brak: data, temp, obj, handler1)?
+23. Czy language jest jednym z: TypeScript/Node.js, Python, Rust, Go, C#/.NET, Java, C++?
+24. Czy is_chaotic_user: true → ask_clarification użyte przed modyfikacjami plików?
+25. Czy is_deep_repo: true → list_files z min 40 plikami i search_code użyte?
+
+⭐ Czy Claude 4.7 / DeepSeek V4 dałby 9.6+/10?
+
+GENERUJ DOKŁADNIE 1 PRZYKŁAD. Zaczyna się od { kończy na }. Zero innego tekstu.`;
+    }
+
+    const LOG = (...args) => console.log('[AutoCycle v70.0]', ...args);
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    let cycleComplete = false;
+
+    // ─────────────────────────────────────────────
+    // STATYSTYKI (v70.0: rozszerzone)
+    // ─────────────────────────────────────────────
+    const STORAGE_KEY = 'deepseek_gen_stats_v70';
+
+    function loadStats() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                Object.assign(stats, parsed);
+                LOG('📂 Statystyki wczytane z localStorage');
+            }
+        } catch (e) { LOG('⚠ Nie udało się wczytać statystyk'); }
+    }
+
+    function saveStats() {
+        try {
+            const toSave = {
+                total: stats.total, valid: stats.valid, autoFixed: stats.autoFixed,
+                invalid: stats.invalid, tooShort: stats.tooShort,
+                duplicates: stats.duplicates, poorRotation: stats.poorRotation,
+                byDifficulty: stats.byDifficulty, byTeachingStyle: stats.byTeachingStyle,
+                bySystemPromptVariant: stats.bySystemPromptVariant,
+                byDomain: stats.byDomain, byLanguage: stats.byLanguage,
+                multiTurn: stats.multiTurn, negativeExamples: stats.negativeExamples,
+                selfCorrection: stats.selfCorrection,
+                chaoticUser: stats.chaoticUser, deepRepo: stats.deepRepo,
+                fakeApiCalls: stats.fakeApiCalls,
+                crossFileInconsistencies: stats.crossFileInconsistencies,
+                deadCodeOccurrences: stats.deadCodeOccurrences,
+                semanticDuplicates: stats.semanticDuplicates,
+                complexityViolations: stats.complexityViolations,
+                dependencyVersionIssues: stats.dependencyVersionIssues,
+                tokenEfficiencyWarnings: stats.tokenEfficiencyWarnings,
+                adversarialTestMissing: stats.adversarialTestMissing
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+        } catch (e) { /* ignore */ }
+    }
+
+    const stats = {
+        total: 0, valid: 0, autoFixed: 0, invalid: 0, tooShort: 0,
+        duplicates: 0, poorRotation: 0,
+        byDifficulty: { easy: 0, medium: 0, hard: 0, extreme: 0, unknown: 0 },
+        byTeachingStyle: { concise: 0, verbose: 0, ascii_diagrams: 0, decision_tree: 0, table_driven: 0, unknown: 0 },
+        bySystemPromptVariant: { 1: 0, 2: 0, 3: 0, 4: 0, unknown: 0 },
+        byDomain: {},
+        byLanguage: { 'TypeScript/Node.js': 0, 'Python': 0, 'Rust': 0, 'Go': 0, 'C#/.NET': 0, 'Java': 0, 'C++': 0, unknown: 0 },
+        multiTurn: 0, negativeExamples: 0, warningsOnly: 0, selfCorrection: 0,
+        chaoticUser: 0, deepRepo: 0,
+        // v70.0 nowe
+        fakeApiCalls: 0,
+        crossFileInconsistencies: 0,
+        deadCodeOccurrences: 0,
+        semanticDuplicates: 0,
+        complexityViolations: 0,
+        dependencyVersionIssues: 0,
+        tokenEfficiencyWarnings: 0,
+        adversarialTestMissing: 0,
+        lastSaved: 0,
+        printSummary() {
+            LOG('════════ STATYSTYKI v70.0 ULTIMATE ════════');
+            LOG(`Łącznie: ${this.total} | ✅ ${this.valid} | 🔧 ${this.autoFixed} | ❌ ${this.invalid} | 📏 ${this.tooShort} | 🔁 ${this.duplicates}`);
+            LOG(`Skuteczność: ${this.total ? Math.round((this.valid / this.total) * 100) : 0}%`);
+            LOG(`Difficulty: easy=${this.byDifficulty.easy} medium=${this.byDifficulty.medium} hard=${this.byDifficulty.hard} extreme=${this.byDifficulty.extreme}`);
+            LOG(`Nowe odrzucenia: FakeAPI=${this.fakeApiCalls} CrossFile=${this.crossFileInconsistencies} DeadCode=${this.deadCodeOccurrences}`);
+            LOG(`SemDup=${this.semanticDuplicates} Compl=${this.complexityViolations} DepVer=${this.dependencyVersionIssues}`);
+            LOG(`TokenEff=${this.tokenEfficiencyWarnings} AdvTest=${this.adversarialTestMissing}`);
+            LOG('══════════════════════════════════');
+        }
+    };
+
+    // ─────────────────────────────────────────────
+    // TOOL SCHEMAS (bez zmian)
+    // ─────────────────────────────────────────────
+    const TOOL_SCHEMAS = {
+        'read_file': { required: ['path'], optional: [] },
+        'write_file': { required: ['path', 'content'], optional: [] },
+        'replace_in_file': { required: ['path', 'old_str', 'new_str'], optional: [] },
+        'delete_file': { required: ['path'], optional: [] },
+        'create_directory': { required: ['path'], optional: [] },
+        'move_file': { required: ['src_path', 'dst_path'], optional: [] },
+        'copy_file': { required: ['src_path', 'dst_path'], optional: [] },
+        'list_files': { required: ['path', 'depth'], optional: [] },
+        'search_code': { required: ['regex', 'path'], optional: [] },
+        'file_diff': { required: ['path_a', 'path_b'], optional: [] },
+        'execute_command': { required: ['command', 'cwd'], optional: ['timeout_ms', 'env'] },
+        'get_env_info': { required: [], optional: [] },
+        'env_get': { required: ['key'], optional: [] },
+        'env_set': { required: ['key', 'value', 'scope'], optional: [] },
+        'check_port': { required: ['port'], optional: [] },
+        'kill_process_on_port': { required: ['port'], optional: [] },
+        'ssh_exec': { required: ['host', 'user', 'command'], optional: ['key_path'] },
+        'http_request': { required: ['method', 'url'], optional: ['headers', 'body', 'timeout_ms'] },
+        'cron_job_create': { required: ['name', 'schedule', 'command', 'cwd'], optional: [] },
+        'cron_job_list': { required: [], optional: [] },
+        'git_status': { required: ['repo_path'], optional: [] },
+        'git_diff': { required: ['repo_path'], optional: ['file'] },
+        'git_add': { required: ['repo_path', 'files'], optional: [] },
+        'git_commit': { required: ['repo_path', 'message'], optional: [] },
+        'git_create_branch': { required: ['repo_path', 'name'], optional: [] },
+        'git_checkout': { required: ['repo_path', 'branch_or_commit'], optional: [] },
+        'git_push': { required: ['repo_path', 'remote', 'branch'], optional: [] },
+        'git_pull': { required: ['repo_path', 'remote', 'branch'], optional: [] },
+        'git_resolve_conflict': { required: ['repo_path', 'file', 'strategy'], optional: [] },
+        'git_stash': { required: ['repo_path'], optional: [] },
+        'git_stash_pop': { required: ['repo_path'], optional: [] },
+        'git_tag': { required: ['repo_path', 'tag'], optional: ['message'] },
+        'git_log': { required: ['repo_path'], optional: ['limit'] },
+        'run_tests': { required: [], optional: ['path', 'coverage', 'watch'] },
+        'run_linter': { required: [], optional: ['path', 'fix'] },
+        'run_static_analysis': { required: [], optional: ['path', 'strict'] },
+        'run_playwright_test': { required: [], optional: ['test', 'headed', 'browser'] },
+        'screenshot_compare': { required: [], optional: ['baseline', 'threshold'] },
+        'check_wcag': { required: [], optional: ['url', 'level'] },
+        'run_security_scan': { required: ['path'], optional: ['severity'] },
+        'run_profiler': { required: ['path'], optional: ['duration_ms', 'type'] },
+        'run_load_test': { required: [], optional: ['endpoint', 'duration', 'vus', 'rps'] },
+        'docker_build': { required: [], optional: ['tag', 'dockerfile', 'context', 'args'] },
+        'docker_run': { required: [], optional: ['image', 'ports', 'env', 'volumes', 'detach'] },
+        'docker_compose_up': { required: [], optional: ['file', 'services', 'detach'] },
+        'docker_compose_down': { required: [], optional: ['file', 'volumes'] },
+        'docker_logs': { required: [], optional: ['container', 'tail', 'follow'] },
+        'docker_exec': { required: ['container', 'command'], optional: [] },
+        'docker_inspect': { required: ['container'], optional: [] },
+        'docker_image_scan': { required: ['image'], optional: [] },
+        'db_query': { required: ['query'], optional: ['params', 'connection'] },
+        'db_migrate': { required: [], optional: ['direction', 'steps', 'dry_run'] },
+        'db_schema_inspect': { required: [], optional: ['table', 'include_indexes'] },
+        'db_explain': { required: ['query'], optional: ['analyze'] },
+        'db_seed': { required: [], optional: ['file', 'truncate'] },
+        'db_backup': { required: ['output_path'], optional: ['compress'] },
+        'db_restore': { required: ['input_path'], optional: [] },
+        'redis_get': { required: ['key'], optional: ['connection'] },
+        'redis_set': { required: ['key', 'value'], optional: ['ttl_seconds', 'connection'] },
+        'redis_del': { required: ['key'], optional: ['connection'] },
+        'redis_flush': { required: [], optional: ['pattern', 'connection'] },
+        'kafka_publish': { required: ['topic', 'message'], optional: ['partition_key'] },
+        'kafka_consume': { required: ['topic', 'group_id'], optional: ['max_messages', 'timeout_ms'] },
+        'kafka_topic_create': { required: ['name'], optional: ['partitions', 'replication_factor'] },
+        'cloud_deploy': { required: ['provider', 'config'], optional: [] },
+        'cloud_logs': { required: ['provider', 'service'], optional: ['tail', 'filter'] },
+        'cloud_secret_get': { required: ['provider', 'secret_name'], optional: [] },
+        'cloud_secret_set': { required: ['provider', 'secret_name', 'value'], optional: [] },
+        'cloud_storage_upload': { required: ['provider', 'bucket', 'local_path', 'remote_path'], optional: [] },
+        'cloud_storage_download': { required: ['provider', 'bucket', 'remote_path', 'local_path'], optional: [] },
+        'cloud_cdn_invalidate': { required: ['provider', 'paths'], optional: [] },
+        'k8s_apply': { required: ['file'], optional: ['namespace', 'dry_run'] },
+        'k8s_get_pods': { required: [], optional: ['namespace', 'label_selector'] },
+        'k8s_logs': { required: ['pod'], optional: ['namespace', 'container', 'tail'] },
+        'k8s_rollback': { required: ['deployment'], optional: ['namespace', 'revision'] },
+        'k8s_scale': { required: ['deployment', 'replicas'], optional: ['namespace'] },
+        'k8s_exec': { required: ['pod', 'command'], optional: ['namespace'] },
+        'k8s_port_forward': { required: ['pod', 'local_port', 'pod_port'], optional: ['namespace'] },
+        'feature_flag_create': { required: ['name', 'description'], optional: ['enabled', 'rollout_percent'] },
+        'feature_flag_update': { required: ['name', 'enabled'], optional: ['rollout_percent', 'user_targets'] },
+        'feature_flag_list': { required: [], optional: [] },
+        'browse_web': { required: ['url'], optional: ['wait_for', 'javascript'] },
+        'mcp_search': { required: ['query'], optional: ['max_results'] },
+        'mcp_fetch_section': { required: ['url', 'selector'], optional: [] },
+        'preview_url': { required: ['url'], optional: ['viewport'] },
+        'lsp_go_to_definition': { required: ['file', 'line', 'character'], optional: [] },
+        'lsp_find_references': { required: ['file', 'line', 'character'], optional: [] },
+        'lsp_rename_symbol': { required: ['file', 'line', 'character', 'newName'], optional: [] },
+        'lsp_get_diagnostics': { required: [], optional: ['file'] },
+        'dap_set_breakpoint': { required: ['file', 'line'], optional: ['condition'] },
+        'dap_inspect_variable': { required: ['name'], optional: ['scope'] },
+        'dap_step_over': { required: [], optional: [] },
+        'dap_step_into': { required: [], optional: [] },
+        'dap_continue': { required: [], optional: [] },
+        'dap_evaluate': { required: ['expression'], optional: [] },
+        'ask_clarification': { required: ['question'], optional: ['options'] },
+        'notify': { required: ['message'], optional: ['level'] },
+        'dependency_check': { required: ['package'], optional: ['version', 'ecosystem'] },
+    };
+
+    // ─────────────────────────────────────────────
+    // WALIDATORY v69.0 (oryginalne)
+    // ─────────────────────────────────────────────
+    function validateToolCalls(content, issues) {
+        const reNew = /<tool_call\s+name="([^"]+)">\s*<args>(.*?)<\/args>\s*<\/tool_call>/gs;
+        let m;
+        while ((m = reNew.exec(content)) !== null) {
+            const name = m[1];
+            let args = {};
+            try {
+                args = JSON.parse(m[2]);
+            } catch { issues.push(`Niepoprawny JSON w <args> dla narzędzia: ${name}`); continue; }
+            if (!TOOL_SCHEMAS[name]) { issues.push(`Nieznane narzędzie: "${name}"`); continue; }
+            const schema = TOOL_SCHEMAS[name];
+            schema.required.forEach(r => { if (!(r in args)) issues.push(`Brak arg "${r}" w ${name}()`); });
+            const allowed = [...schema.required, ...schema.optional];
+            Object.keys(args).forEach(k => { if (!allowed.includes(k)) issues.push(`Nieznany arg "${k}" w ${name}()`); });
+        }
+        const reOld = /<tool_call>(\{.*?\})<\/tool_call>/gs;
+        while ((m = reOld.exec(content)) !== null) {
+            try {
+                const tc = JSON.parse(m[1]);
+                const name = tc.name;
+                const args = tc.args || {};
+                issues.push(`Stary format tool_call bez atrybutu name wykryty dla: "${name}" – użyj <tool_call name="${name}"><args>...</args></tool_call>`);
+                if (!TOOL_SCHEMAS[name]) { issues.push(`Nieznane narzędzie: "${name}"`); continue; }
+                const schema = TOOL_SCHEMAS[name];
+                schema.required.forEach(r => { if (!(r in args)) issues.push(`Brak arg "${r}" w ${name}()`); });
+            } catch { issues.push('Niepoprawny JSON w starym formacie <tool_call>'); }
+        }
+    }
+
+    function fixNewlinesInJsonStrings(str) {
+        let result = '', inString = false, escaped = false;
+        for (let i = 0; i < str.length; i++) {
+            const ch = str[i];
+            if (escaped) { result += ch; escaped = false; continue; }
+            if (ch === '\\' && inString) { result += ch; escaped = true; continue; }
+            if (ch === '"') { inString = !inString; result += ch; continue; }
+            if (inString) {
+                if (ch === '\n') { result += '\\n'; continue; }
+                if (ch === '\r') { result += '\\r'; continue; }
+                if (ch === '\t') { result += '\\t'; continue; }
+                const code = ch.charCodeAt(0);
+                if (code < 0x20) { result += '\\u' + code.toString(16).padStart(4, '0'); continue; }
+            }
+            result += ch;
+        }
+        return result;
+    }
+
+    function autoFix(raw) {
+        let text = raw.trim();
+        text = text.replace(/^\uFEFF/, '').replace(/\0/g, '');
+        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        const f = text.indexOf('{'), l = text.lastIndexOf('}');
+        if (f !== -1 && l !== -1 && l > f && (f > 0 || l < text.length - 1))
+            text = text.slice(f, l + 1);
+        text = text.replace(/,\s*([}\]])/g, '$1');
+        text = fixNewlinesInJsonStrings(text);
+        text = text.replace(/(?<!\\)\\(?!["\\/bfnrtu])/g, '\\\\');
+        return text;
+    }
+
+    function estimateTokens(text) {
+        return Math.round(text.length / 4);
+    }
+
+    function updateDomainTracking(parsed) {
+        if (parsed?.metadata?.domain) {
+            lastDomain = parsed.metadata.domain;
+        }
+        if (parsed?.metadata?.language) {
+            lastLanguage = parsed.metadata.language;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // v70.0 NOWE WALIDATORY (mechanizmy 1-8)
+    // ─────────────────────────────────────────────
+
+    // 1. Fake API Detection (wykrywanie halucynacji)
+    function detectFakeApiCalls(content, language, issues) {
+        const stdlibModules = {
+            'Python': ['os', 'sys', 're', 'json', 'math', 'datetime', 'collections', 'itertools', 'functools', 'pathlib', 'typing', 'uuid', 'hashlib', 'base64', 'logging', 'unittest', 'argparse', 'csv', 'io', 'xml', 'html', 'http', 'urllib', 'socket', 'ssl', 'email', 'sqlite3', 'tempfile', 'shutil', 'glob', 'fnmatch', 'time', 'threading', 'multiprocessing', 'subprocess', 'asyncio', 'concurrent', 'typing_extensions'],
+            'TypeScript/Node.js': ['fs', 'path', 'os', 'http', 'https', 'url', 'querystring', 'stream', 'util', 'events', 'assert', 'buffer', 'crypto', 'zlib', 'readline', 'net', 'dns', 'dgram', 'cluster', 'child_process', 'worker_threads', 'tls', 'v8', 'vm'],
+            'Rust': ['std::collections', 'std::io', 'std::fs', 'std::path', 'std::thread', 'std::sync', 'std::time', 'std::net', 'std::env', 'std::process', 'std::fmt', 'std::str', 'std::vec', 'std::string', 'std::option', 'std::result'],
+            'Go': ['fmt', 'net/http', 'io', 'os', 'time', 'sync', 'encoding/json', 'errors', 'strings', 'strconv', 'bytes', 'bufio', 'context', 'log', 'flag', 'path/filepath', 'reflect', 'regexp', 'sort', 'testing'],
+            'Java': ['java.util', 'java.io', 'java.nio', 'java.net', 'java.sql', 'java.time', 'java.lang', 'java.math', 'java.security', 'java.text', 'java.util.concurrent', 'java.util.stream'],
+            'C#/.NET': ['System', 'System.Collections.Generic', 'System.IO', 'System.Linq', 'System.Net.Http', 'System.Text', 'System.Threading.Tasks', 'Microsoft.Extensions.DependencyInjection', 'Microsoft.Extensions.Logging'],
+            'C++': ['iostream', 'fstream', 'sstream', 'string', 'vector', 'map', 'set', 'algorithm', 'memory', 'thread', 'mutex', 'chrono', 'filesystem', 'regex', 'random']
+        };
+
+        const allowedModules = stdlibModules[language] || [];
+        if (allowedModules.length === 0) return;
+
+        const importRegex = /import\s+(\w[\w.]*)/g;
+        let match;
+        while ((match = importRegex.exec(content)) !== null) {
+            const mod = match[1];
+            if (!allowedModules.some(allowed => mod.startsWith(allowed))) {
+                issues.push(`FAKE_API: Podejrzany import "${mod}" – nie znajduje się w standardowej bibliotece ${language} i może być halucynacją.`);
+                stats.fakeApiCalls++;
+            }
+        }
+    }
+
+    // 2. Cross-File Consistency (spójność między plikami)
+    function checkCrossFileConsistency(content, issues) {
+        const fileSections = content.split(/\/\/ FILE:\s*(.+)/);
+        const files = {};
+        for (let i = 1; i < fileSections.length; i += 2) {
+            const filePath = fileSections[i].trim();
+            const fileContent = fileSections[i + 1] || '';
+            files[filePath] = fileContent;
+        }
+
+        const definedSymbols = {};
+        for (const [path, code] of Object.entries(files)) {
+            const defs = [];
+            const funcRegex = /(?:function|def|func|fn|class|const|let|var)\s+(\w+)/g;
+            let m;
+            while ((m = funcRegex.exec(code)) !== null) defs.push(m[1]);
+            definedSymbols[path] = defs;
+        }
+
+        for (const [path, code] of Object.entries(files)) {
+            const importRegex = /(?:import|require|from)\s+(?:\{?\s*(\w+)\s*\}?\s*from\s+['"]\.?\/?([^'"]+)['"]|['"](\w+)['"])/g;
+            let m;
+            while ((m = importRegex.exec(code)) !== null) {
+                const importedName = m[1] || m[3];
+                const targetFile = m[2];
+                if (!importedName) continue;
+                let found = false;
+                for (const [fpath, symbols] of Object.entries(definedSymbols)) {
+                    if (fpath.includes(targetFile)) {
+                        if (symbols.includes(importedName)) found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    issues.push(`CROSS_FILE: Import "${importedName}" w pliku ${path} nie został znaleziony w pliku docelowym.`);
+                    stats.crossFileInconsistencies++;
+                }
+            }
+        }
+    }
+
+    // 3. Dead Code Detection
+    function detectDeadCode(content, issues) {
+        const funcDefs = content.match(/(?:function|def|fn|func|class|const|let|var)\s+(\w+)/g) || [];
+        const usedSymbols = new Set();
+        const usageRegex = /\b(\w+)\s*\(/g;
+        let m;
+        while ((m = usageRegex.exec(content)) !== null) usedSymbols.add(m[1]);
+        for (const def of funcDefs) {
+            const name = def.split(/\s+/)[1];
+            if (!usedSymbols.has(name) && !['main', 'index', 'handler', 'init'].includes(name)) {
+                issues.push(`DEAD_CODE: Zdefiniowano "${def}" ale nigdzie nie użyto.`);
+                stats.deadCodeOccurrences++;
+            }
+        }
+    }
+
+    // 4. Semantic Duplicate Detection (prosty fingerprint)
+    const recentFingerprints = [];
+    function detectSemanticDuplicate(parsed) {
+        if (!parsed.metadata) return;
+        const fingerprint = `${parsed.metadata.language}|${parsed.metadata.domain}|${parsed.metadata.project_type}|${parsed.metadata.unique_twist}`;
+        if (recentFingerprints.includes(fingerprint)) {
+            stats.semanticDuplicates++;
+            return true;
+        }
+        recentFingerprints.push(fingerprint);
+        if (recentFingerprints.length > 20) recentFingerprints.shift();
+        return false;
+    }
+
+    // 5. Cyclomatic Complexity Gate
+    function checkCyclomaticComplexity(content, difficulty, issues) {
+        const complexity = (content.match(/\b(if|else\s+if|for|while|switch|case\b|catch)\b/g) || []).length + 1;
+        const limits = { easy: [1, 4], medium: [5, 12], hard: [13, 25], extreme: [26, 100] };
+        const [min, max] = limits[difficulty] || [0, Infinity];
+        if (complexity < min || complexity > max) {
+            issues.push(`COMPLEXITY: Złożoność cyklomatyczna ${complexity} poza zakresem dla ${difficulty} (${min}-${max}).`);
+            stats.complexityViolations++;
+        }
+    }
+
+    // 6. Dependency Version Consistency
+    function checkDependencyVersions(content, issues) {
+        const versionRegex = /"version"\s*:\s*"(\d+\.\d+\.\d+)"/g;
+        let m;
+        while ((m = versionRegex.exec(content)) !== null) {
+            const ver = m[1];
+            if (!/^\d+\.\d+\.\d+$/.test(ver)) {
+                issues.push(`DEP_VERSION: Niewłaściwy format wersji "${ver}".`);
+                stats.dependencyVersionIssues++;
+            }
+        }
+    }
+
+    // 7. Token Efficiency Score
+    function checkTokenEfficiency(content, issues) {
+        const operationalCount = (content.match(/(<tool_call|app\.(get|post|put|delete)|db\.(query|execute)|\.test\(|\.assert)/g) || []).length;
+        const tokens = estimateTokens(content);
+        if (tokens > 0 && operationalCount / tokens < 0.02) {
+            issues.push(`TOKEN_EFF: Niska gęstość operacji (${(operationalCount/tokens*100).toFixed(1)}%) – kod może być rozwlekły.`);
+            stats.tokenEfficiencyWarnings++;
+        }
+    }
+
+    // 8. Adversarial Self-Test
+    function checkAdversarialTests(content, issues) {
+        const testSection = content.match(/(?:describe|it|test|def test_|fn test_)/g) || [];
+        const adversarialIndicators = /(?:empty|null|undefined|NaN|extreme|boundary|invalid|negative|zero|large|overflow|injection|escape|script)/i;
+        let hasAdversarial = false;
+        for (const test of testSection) {
+            if (adversarialIndicators.test(test)) {
+                hasAdversarial = true;
+                break;
+            }
+        }
+        if (!hasAdversarial && testSection.length > 0) {
+            issues.push(`ADVERSARIAL: Brak testów przypadków brzegowych (np. puste wejście, ekstremalne wartości).`);
+            stats.adversarialTestMissing++;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // GŁÓWNA WALIDACJA STRUKTURY (rozszerzona)
+    // ─────────────────────────────────────────────
+    function validateStructure(parsed, meta) {
+        const issues = [], warnings = [];
+        const difficulty = parsed?.metadata?.difficulty || 'unknown';
+
+        if (!parsed.messages || !Array.isArray(parsed.messages)) {
+            issues.push('Brak pola "messages"');
+            return { valid: false, issues, warnings };
+        }
+        if (parsed.messages.length !== 3)
+            issues.push(`messages ma ${parsed.messages.length} el. zamiast 3`);
+
+        ['system', 'user', 'assistant'].forEach((role, i) => {
+            if (parsed.messages[i]?.role !== role)
+                issues.push(`messages[${i}].role ≠ "${role}"`);
+            if (!parsed.messages[i]?.content || parsed.messages[i].content.length < 10)
+                issues.push(`messages[${i}].content za krótki`);
+        });
+
+        const am = parsed.messages.find(m => m.role === 'assistant');
+        if (am?.content) {
+            const c = am.content;
+            if (!c.includes('<think>')) issues.push('Brak <think>');
+            if (!c.includes('</think>')) issues.push('Brak </think>');
+
+            const te = c.indexOf('</think>');
+            const ts = c.indexOf('<think>');
+            if (ts !== -1 && te !== -1 && te > ts) {
+                const thinkContent = c.slice(ts + 7, te);
+                const thinkTokens = estimateTokens(thinkContent);
+                if (thinkTokens < 400) issues.push(`<think> za krótki: ~${thinkTokens} tokenów (min 400)`);
+
+                if (!thinkContent.includes('## 1. Architektura i Ograniczenia'))
+                    issues.push('<think> brak sekcji "## 1. Architektura i Ograniczenia"');
+                if (!thinkContent.includes('## 2. Threat Modeling'))
+                    issues.push('<think> brak sekcji "## 2. Threat Modeling"');
+                if (!thinkContent.includes('## 3. Strategia ReAct'))
+                    issues.push('<think> brak sekcji "## 3. Strategia ReAct"');
+                if (!thinkContent.includes('## 4. JSONL Self-Check'))
+                    issues.push('<think> brak sekcji "## 4. JSONL Self-Check"');
+            }
+
+            if (te !== -1) {
+                const after = c.slice(te + 8).trim();
+                if (after.length < 150) issues.push('Output po </think> za krótki');
+                if (!(after.match(/\/\/ FILE:/g) || []).length) issues.push('Brak // FILE:');
+                if (!after.includes('<tool_call')) issues.push('Brak <tool_call>');
+
+                const afterTokens = estimateTokens(after);
+                const minTokens = { easy: 150, medium: 400, hard: 800, extreme: 1400 };
+                if (minTokens[difficulty] && afterTokens < minTokens[difficulty]) {
+                    issues.push(`Output za krótki dla ${difficulty}: ~${afterTokens} tokenów (min ${minTokens[difficulty]})`);
+                }
+
+                if (!after.includes('git_commit')) {
+                    if (difficulty === 'easy') warnings.push('Brak git_commit (opcjonalny easy)');
+                    else if (difficulty !== 'unknown') issues.push('Brak git_commit (wymagany medium+)');
+                    else warnings.push('Brak git_commit');
+                }
+                if (!after.includes('run_tests')) {
+                    if (difficulty === 'easy') warnings.push('Brak run_tests (opcjonalne easy)');
+                    else if (difficulty !== 'unknown') issues.push('Brak run_tests (wymagane medium+)');
+                    else warnings.push('Brak run_tests');
+                }
+                if (!after.includes('run_security_scan') && (difficulty === 'hard' || difficulty === 'extreme'))
+                    issues.push('Brak run_security_scan (wymagane hard/extreme)');
+                if (!after.includes('BENCHMARK') && (difficulty === 'hard' || difficulty === 'extreme'))
+                    warnings.push('Brak BENCHMARK (zalecane hard/extreme)');
+                if (!after.includes('retry') && !after.includes('fallback') &&
+                    !after.includes('circuit') && !after.includes('SELF-CORRECTION'))
+                    warnings.push('Brak error recovery pattern');
+                if (!after.includes('zod') && !after.includes('pydantic') &&
+                    !after.includes('class-validator') && !after.includes('validate'))
+                    warnings.push('Brak walidacji inputów');
+
+                validateToolCalls(after, issues);
+
+                // WYWOŁANIE NOWYCH WALIDATORÓW v70.0
+                detectFakeApiCalls(after, parsed.metadata?.language || 'unknown', issues);
+                checkCrossFileConsistency(after, issues);
+                detectDeadCode(after, issues);
+                checkCyclomaticComplexity(after, difficulty, issues);
+                checkDependencyVersions(after, issues);
+                checkTokenEfficiency(after, issues);
+                checkAdversarialTests(after, issues);
+
+                if (detectSemanticDuplicate(parsed)) {
+                    issues.push('SEMANTIC_DUPLICATE: Przykład ma identyczny fingerprint jak jeden z ostatnich 20.');
+                }
+
+                // chaos/deep_repo checks
+                if (meta && meta.is_chaotic_user) {
+                    const beforeFirstWrite = c.substring(0, c.indexOf('<tool_call name="write_file"'));
+                    const beforeFirstReplace = c.substring(0, c.indexOf('<tool_call name="replace_in_file"'));
+                    const beforeModification = beforeFirstWrite.length > 0 ? beforeFirstWrite : beforeFirstReplace;
+                    if (beforeModification.length === 0 || !beforeModification.includes('ask_clarification')) {
+                        issues.push('is_chaotic_user:true – brak ask_clarification przed modyfikacjami plików!');
+                    }
+                }
+                if (meta && meta.is_deep_repo) {
+                    if (!c.includes('<tool_call name="list_files"')) {
+                        issues.push('is_deep_repo:true – brak list_files!');
+                    }
+                    if (!c.includes('<tool_call name="search_code"')) {
+                        issues.push('is_deep_repo:true – brak search_code!');
+                    }
+                    if (!c.includes('<tool_call name="read_file"')) {
+                        issues.push('is_deep_repo:true – brak read_file!');
+                    }
+                }
+            }
+        }
+
+        if (!parsed.metadata) {
+            issues.push('Brak metadata');
+        } else {
+            ['category', 'difficulty', 'project_type', 'instruction_format',
+                'is_negative_example', 'is_multi_turn', 'unique_id', 'domain']
+                .forEach(k => { if (!(k in parsed.metadata)) issues.push(`metadata.${k} brakuje`); });
+        }
+
+        return { valid: issues.length === 0, issues, warnings };
+    }
+
+    function validateAndProcess(rawText) {
+        stats.total++;
+        const rawLen = rawText.trim().length;
+
+        if (rawLen < 2500) {
+            stats.tooShort++; stats.invalid++;
+            return { status: 'too_short', text: rawText, issues: [`Za krótki: ${rawLen} zn.`] };
+        }
+
+        const contentHash = simpleHash(rawText);
+        if (sessionHashes.has(contentHash)) {
+            stats.duplicates++; stats.invalid++;
+            LOG('🔁 DUPLIKAT wykryty przez hash – pomijam.');
+            return { status: 'duplicate', text: rawText, issues: ['Duplikat zawartości'] };
+        }
+
+        let parsed = null, fixed = rawText.trim(), wasFixed = false;
+        try {
+            parsed = JSON.parse(fixed);
+        } catch {
+            LOG('⚠ JSON parse failed, próba auto-fix...');
+            fixed = autoFix(rawText);
+            try { parsed = JSON.parse(fixed); wasFixed = true; LOG('🔧 Auto-fix OK'); }
+            catch (e2) { stats.invalid++; return { status: 'invalid', text: rawText, issues: [`JSON error: ${e2.message}`] }; }
+        }
+
+        const { valid, issues, warnings } = validateStructure(parsed, currentCycleMeta);
+
+        if (parsed.metadata) {
+            updateDomainTracking(parsed);
+            const uid = parsed.metadata.unique_id;
+            if (uid && seenUniqueIds.has(uid)) {
+                stats.duplicates++;
+                warnings.push(`⚠ DUPLIKAT unique_id: ${uid}`);
+            } else if (uid) {
+                seenUniqueIds.add(uid);
+            }
+
+            const d = parsed.metadata.difficulty || 'unknown';
+            stats.byDifficulty[d] = (stats.byDifficulty[d] || 0) + 1;
+            const ts2 = parsed.metadata.teaching_style || 'unknown';
+            stats.byTeachingStyle[ts2] = (stats.byTeachingStyle[ts2] || 0) + 1;
+            const spv = parsed.metadata.system_prompt_variant;
+            if (spv && [1, 2, 3, 4].includes(spv)) stats.bySystemPromptVariant[spv]++;
+            else stats.bySystemPromptVariant.unknown++;
+            if (parsed.metadata.is_multi_turn === true) stats.multiTurn++;
+            if (parsed.metadata.is_negative_example === true) stats.negativeExamples++;
+            const lang = parsed.metadata.language || 'unknown';
+            stats.byLanguage[lang] = (stats.byLanguage[lang] || 0) + 1;
+            if (parsed.metadata.is_chaotic_user === true) stats.chaoticUser++;
+            if (parsed.metadata.is_deep_repo === true) stats.deepRepo++;
+            const domain = parsed.metadata.domain || 'unknown';
+            stats.byDomain[domain] = (stats.byDomain[domain] || 0) + 1;
+            const ac = parsed.messages?.find(m => m.role === 'assistant')?.content || '';
+            if (ac.includes('SELF-CORRECTION')) stats.selfCorrection++;
+            lastGeneratedText = ac;
+            const rotWarnings = warnings.filter(w => w.includes('ROTACJA'));
+            if (rotWarnings.length > 0) stats.poorRotation++;
+            if (parsed.metadata.teaching_style) lastTeachingStyle = parsed.metadata.teaching_style;
+            if (parsed.metadata.system_prompt_variant) lastSystemPromptVariant = parsed.metadata.system_prompt_variant;
+            if (parsed.metadata.difficulty) lastDifficulty = parsed.metadata.difficulty;
+        } else {
+            stats.byDifficulty.unknown++;
+            stats.byTeachingStyle.unknown++;
+            stats.bySystemPromptVariant.unknown++;
+            stats.byLanguage.unknown++;
+        }
+
+        if (valid) {
+            if (warnings.length > 0) stats.warningsOnly++;
+            sessionHashes.add(contentHash);
+            saveStats();
+            if (wasFixed) { stats.autoFixed++; stats.valid++; return { status: 'fixed', text: fixed, issues: warnings }; }
+            stats.valid++;
+            return { status: 'valid', text: fixed, issues: warnings };
+        }
+
+        const critical = issues.filter(i =>
+            i.includes('messages') || (i.includes('<think>') && !i.includes('długość')) ||
+            i.includes('assistant') || i.includes('Za krótki') || i.includes('Brak pola') ||
+            i.includes('Nieznane narzędzie') || i.includes('Brak arg') ||
+            i.includes('is_multi_turn:true') || i.includes('wymagany medium+') ||
+            i.includes('wymagane medium+') || i.includes('wymagane hard/extreme') ||
+            i.includes('Output za krótki') || i.includes('brak sekcji') ||
+            i.includes('is_chaotic_user') || i.includes('is_deep_repo') ||
+            i.includes('FAKE_API') || i.includes('CROSS_FILE') || i.includes('DEAD_CODE') ||
+            i.includes('COMPLEXITY') || i.includes('DEP_VERSION') || i.includes('TOKEN_EFF') ||
+            i.includes('ADVERSARIAL') || i.includes('SEMANTIC_DUPLICATE')
+        );
+
+        if (critical.length > 0) {
+            stats.invalid++;
+            return { status: 'invalid', text: fixed, issues: [...critical, ...warnings] };
+        }
+
+        sessionHashes.add(contentHash);
+        if (wasFixed) stats.autoFixed++;
+        stats.valid++; stats.warningsOnly++;
+        saveStats();
+        return { status: wasFixed ? 'fixed' : 'valid', text: fixed, issues: [...issues, ...warnings] };
+    }
+
+    // ─────────────────────────────────────────────
+    // ZAPIS (bez zmian)
+    // ─────────────────────────────────────────────
+    const downloaded = new Set();
+    let _resolveClipboard = null;
+
+    function saveFile(result, rawText) {
+        if (result.status === 'too_short' || result.status === 'duplicate') return;
+        const ts = Date.now();
+        let fileContent, filename;
+
+        if (result.status === 'invalid') {
+            const errorHeader = result.issues.map(e => `// VALIDATION_ERROR: ${e}`).join('\n');
+            fileContent = errorHeader + '\n' + rawText + '\n';
+            filename = `INVALID_${ts}.jsonl`;
+        } else {
+            fileContent = result.text + '\n';
+            filename = `deepseek_export_${ts}.jsonl`;
+        }
+
+        const blob = new Blob([fileContent], { type: 'application/jsonl' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.download = filename;
+        a.href = url;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        LOG(`📁 Zapisano: ${filename}`);
+    }
+
+    function downloadJSONL(rawText) {
+        if (!rawText || downloaded.has(rawText)) {
+            if (_resolveClipboard) {
+                const resolve = _resolveClipboard;
+                _resolveClipboard = null;
+                resolve('skipped');
+            }
+            return;
+        }
+        downloaded.add(rawText);
+        setTimeout(() => downloaded.delete(rawText), 180000);
+
+        const result = validateAndProcess(rawText);
+
+        if (result.status === 'too_short') LOG(`📏 ZA KRÓTKI – pomijam.`);
+        else if (result.status === 'duplicate') LOG(`🔁 DUPLIKAT – pomijam.`);
+        else if (result.status === 'valid') LOG(`✅ VALID`);
+        else if (result.status === 'fixed') LOG(`🔧 AUTO-FIXED`);
+        else {
+            LOG(`❌ INVALID`);
+            result.issues.forEach(i => LOG(`  ⚠ ${i}`));
+        }
+
+        saveFile(result, rawText);
+
+        if (_resolveClipboard) {
+            const resolve = _resolveClipboard;
+            _resolveClipboard = null;
+            resolve(result.status);
+        }
+
+        if (stats.total % 10 === 0) stats.printSummary();
+    }
+
+    function installClipboardInterceptor() {
+        if (navigator.clipboard.__intercepted) return;
+        navigator.clipboard.__intercepted = true;
+        const original = navigator.clipboard.writeText.bind(navigator.clipboard);
+        navigator.clipboard.writeText = async (text) => {
+            LOG(`🔌 Interceptor: ${text.length} znaków`);
+            downloadJSONL(text);
+            return original(text);
+        };
+        LOG('🔌 Interceptor schowka aktywny.');
+    }
+
+    function waitForClipboardCapture(timeoutMs = 12000) {
+        return new Promise((resolve) => {
+            _resolveClipboard = resolve;
+            setTimeout(() => {
+                if (_resolveClipboard) {
+                    LOG('⚠ Timeout interceptora');
+                    _resolveClipboard = null;
+                    resolve(null);
+                }
+            }, timeoutMs);
+        });
+    }
+
+    function simulateClick(el) {
+        if (!el) return;
+        ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(t =>
+            el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }))
+        );
+    }
+
+    function setTextareaValue(ta, text) {
+        ta.focus();
+        const s = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+        s.call(ta, text);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function getTextarea() {
+        return document.querySelector('textarea._27c9245') ||
+            document.querySelector('textarea[placeholder]') ||
+            document.querySelector('textarea');
+    }
+
+    async function scrollToBottomAndWait() {
+        const vl = document.querySelector('.ds-virtual-list');
+        if (vl) vl.scrollTop = vl.scrollHeight;
+        window.scrollTo(0, document.body.scrollHeight);
+        document.documentElement.scrollTop = document.documentElement.scrollHeight;
+        if (vl || document.body) {
+            (vl || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        }
+        await wait(800);
+        if (vl) vl.scrollTop = vl.scrollHeight;
+        await wait(500);
+    }
+
+    function getSendButton() {
+        return document.querySelector('div._52c986b[role="button"]');
+    }
+
+    function isActiveSendArrow() {
+        const btn = getSendButton();
+        if (!btn) return false;
+        if (btn.classList.contains('ds-icon-button--disabled')) return false;
+        if (btn.getAttribute('aria-disabled') === 'true') return false;
+        const d = btn.querySelector('svg path')?.getAttribute('d') || '';
+        return d.includes('M8.3125') && !d.includes('M4.88');
+    }
+
+    function isInactiveSendArrow() {
+        const btn = getSendButton();
+        if (!btn) return false;
+        if (!btn.classList.contains('ds-icon-button--disabled') && btn.getAttribute('aria-disabled') !== 'true') return false;
+        const d = btn.querySelector('svg path')?.getAttribute('d') || '';
+        return d.includes('M8.3125') && !d.includes('M4.88');
+    }
+
+    async function waitForActiveSendButton(ms = 15000) {
+        const t = Date.now();
+        while (Date.now() - t < ms) {
+            if (isActiveSendArrow()) return getSendButton();
+            await wait(200);
+        }
+        return null;
+    }
+
+    async function waitForInactiveArrow() {
+        const t = Date.now();
+        let last = Date.now();
+        while (true) {
+            if (isInactiveSendArrow()) {
+                LOG(`✅ Gotowe po ${Math.round((Date.now() - t) / 1000)}s`);
+                return true;
+            }
+            if (Date.now() - last > 60000) {
+                LOG(`⏳ ${Math.round((Date.now() - t) / 1000)}s... nadal generuje, czekam dalej bez limitu`);
+                last = Date.now();
+            }
+            await wait(400);
+        }
+    }
+
+    function getLastAssistantMessage() {
+        const s = document.querySelectorAll('._4f9bf79._43c05b5');
+        if (s.length) return s[s.length - 1];
+        const g = document.querySelectorAll('.ds-message-assistant, [class*="ds-message"][data-role="assistant"]');
+        if (g.length) return g[g.length - 1];
+        const all = document.querySelectorAll('.ds-message');
+        for (let i = all.length - 1; i >= 0; i--) {
+            if (!all[i].querySelector('.fbb737a4')) return all[i];
+        }
+        return null;
+    }
+
+    function isInsideThinking(el) {
+        return !!el.closest('.ds-think-content, .e1675d8b');
+    }
+
+    function tryCopyMethod1(msg) {
+        for (const btn of msg.querySelectorAll('button.ds-atom-button.ds-text-button--with-icon')) {
+            if (isInsideThinking(btn) || btn.getAttribute('aria-disabled') === 'true') continue;
+            if (btn.querySelector('span.code-info-button-text')?.innerText.trim() === 'Kopiuj') {
+                LOG('✅ [M1] Klikam tekstowy Kopiuj');
+                simulateClick(btn);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function tryCopyMethod2(msg) {
+        for (const c of msg.querySelectorAll('[class*="_965abe9"]')) {
+            if (isInsideThinking(c)) continue;
+            const ib = c.querySelector('.db183363.ds-icon-button');
+            if (ib && ib.getAttribute('aria-disabled') !== 'true') {
+                LOG('✅ [M2] Klikam .db183363.ds-icon-button');
+                simulateClick(ib);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function tryCopyMethod3(lastMsg) {
+        const actionBars = lastMsg.querySelectorAll('.ds-flex');
+        for (const bar of actionBars) {
+            if (isInsideThinking(bar)) continue;
+            const icons = bar.querySelectorAll('.ds-icon-button[role="button"]');
+            if (icons.length >= 2) {
+                const firstIcon = icons[0];
+                if (firstIcon.getAttribute('aria-disabled') !== 'true') {
+                    LOG('✅ [M3] Klikam pierwszy icon-button w pasku akcji');
+                    simulateClick(firstIcon);
+                    return true;
+                }
+            }
+        }
+        const allIcons = lastMsg.querySelectorAll('.ds-icon-button[role="button"]');
+        for (const icon of allIcons) {
+            if (isInsideThinking(icon)) continue;
+            if (icon.getAttribute('aria-disabled') === 'true') continue;
+            LOG('⚠ [M3 fallback] Klikam pierwszy aktywny icon-button');
+            simulateClick(icon);
+            return true;
+        }
+        return false;
+    }
+
+    async function tryCopyMethod4(msg) {
+        const mc = msg.querySelector('.ds-assistant-message-main-content');
+        const text = mc ? mc.innerText.trim() : (() => {
+            const cl = msg.cloneNode(true);
+            cl.querySelectorAll('.ds-think-content, .e1675d8b').forEach(e => e.remove());
+            return cl.innerText.trim();
+        })();
+        if (!text) return false;
+        try {
+            LOG('✅ [M4] Bezpośredni zapis do clipboard');
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async function hybridCopy() {
+        await scrollToBottomAndWait();
+        const lastMsg = getLastAssistantMessage();
+        if (!lastMsg) {
+            LOG('❌ Brak wiadomości asystenta w DOM');
+            return false;
+        }
+        if (tryCopyMethod1(lastMsg)) return true;
+        LOG('M1 nieudana → M2...');
+        if (tryCopyMethod2(lastMsg)) return true;
+        LOG('M2 nieudana → M3...');
+        if (tryCopyMethod3(lastMsg)) return true;
+        LOG('M3 nieudana → M4...');
+        return await tryCopyMethod4(lastMsg);
+    }
+
+    async function copyWithRetry(ms = 3000) {
+        let i = 0;
+        while (true) {
+            i++;
+            LOG(`📋 Próba kopiowania ${i}`);
+            const capturePromise = waitForClipboardCapture(12000);
+            const ok = await hybridCopy();
+            if (ok) {
+                const status = await capturePromise;
+                if (status !== null) {
+                    LOG(`✅ Copy przechwycone (${status})`);
+                } else {
+                    LOG(`⚠ Copy wykonane, ale nie przechwycone – kontynuuję cykl.`);
+                }
+                return true;
+            }
+            if (i % 20 === 0) {
+                LOG(`⚠ ${i} prób kopiowania – kontynuuję bez limitu...`);
+            }
+            await wait(ms);
+        }
+    }
+
+    async function ensureExpertMode() {
+        LOG('🔍 Sprawdzam tryb Expert...');
+        const expertOption = document.querySelector('[data-model-type="expert"]');
+        if (!expertOption) { LOG('⚠ Nie znaleziono Expert'); return false; }
+        const isChecked = expertOption.getAttribute('aria-checked') === 'true';
+        if (isChecked) { LOG('✅ Expert już włączony'); return true; }
+        LOG('⚙ Włączam Expert...');
+        simulateClick(expertOption);
+        await wait(500);
+        return true;
+    }
+
+    async function ensureToggleButtons() {
+        LOG('🔍 Sprawdzam Deep Think / Search...');
+        const toggles = document.querySelectorAll('.ds-toggle-button');
+        for (const btn of toggles) {
+            const span = btn.querySelector('span._6dbc175');
+            if (!span) continue;
+            const text = span.innerText.trim();
+            if (text === 'Głębokie myślenie' || text === 'Deep Think') {
+                if (btn.getAttribute('aria-pressed') !== 'true') {
+                    LOG(`⚙ Włączam "${text}"`);
+                    simulateClick(btn);
+                    await wait(300);
+                }
+            } else if (text === 'Wyszukiwanie' || text === 'Search') {
+                if (btn.getAttribute('aria-pressed') !== 'true') {
+                    LOG(`⚙ Włączam "${text}"`);
+                    simulateClick(btn);
+                    await wait(300);
+                }
+            }
+        }
+    }
+
+    function monitorAndClickRefreshButton() {
+        LOG('👀 Monitor blokady aktywny');
+        const observer = new MutationObserver(() => {
+            const refreshBtn = document.querySelector('.a3b9bd76._76a2310');
+            if (refreshBtn && refreshBtn.isConnected) {
+                LOG('🔘 Wykryto przycisk blokady – klikam');
+                simulateClick(refreshBtn);
+                setTimeout(() => {
+                    if (refreshBtn && refreshBtn.isConnected) simulateClick(refreshBtn);
+                }, 200);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // ─────────────────────────────────────────────
+    // GŁÓWNA PĘTLA CYKLU (v70.0)
+    // ─────────────────────────────────────────────
+    let totalCycles = 0;
+
+    async function runCycle() {
+        LOG('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        LOG(`🔁 NOWY CYKL #${totalCycles + 1} | valid=${stats.valid} invalid=${stats.invalid} dupl=${stats.duplicates}`);
+
+        const meta = determineCycleModes();
+        updateBannedKeywords(lastGeneratedText);
+
+        const ta = getTextarea();
+        if (!ta) {
+            LOG('❌ Brak textarea – retry za 2s');
+            setTimeout(runCycle, 2000);
+            return;
+        }
+
+        await ensureToggleButtons();
+
+        const dynamicPrompt = buildPromptText(meta, totalCycles);
+        totalCycles++;
+
+        setTextareaValue(ta, dynamicPrompt);
+        LOG(`📝 Prompt wklejony (język: ${meta.language}, chaos: ${meta.is_chaotic_user}, deep_repo: ${meta.is_deep_repo}, cykl: ${totalCycles})`);
+        await wait(500);
+
+        const btn = await waitForActiveSendButton(15000);
+        if (!btn) {
+            LOG('❌ Brak aktywnego send – retry za 5s');
+            setTimeout(runCycle, 5000);
+            return;
+        }
+
+        simulateClick(btn);
+        LOG('🚀 Wysłano. Czekam na koniec generowania...');
+
+        await waitForInactiveArrow();
+
+        LOG('🎯 Rozpoczynam kopiowanie odpowiedzi...');
+        await copyWithRetry(3000);
+
+        LOG('✅ Skopiowano i zapisano');
+        await wait(1500);
+
+        decrementBanCycles();
+
+        setTextareaValue(ta, '');
+        LOG('➡ Kolejny cykl za 3s');
+        setTimeout(runCycle, 3000);
+    }
+
+    (async function init() {
+        LOG('🚀 AutoCycle v70.0 ULTIMATE – wszystkie 8 zaawansowanych mechanizmów + oryginalne funkcje');
+        loadStats();
+        while (!document.body) await wait(100);
+        await wait(2000);
+        await ensureExpertMode();
+        await ensureToggleButtons();
+        monitorAndClickRefreshButton();
+        installClipboardInterceptor();
+        while (!getTextarea()) await wait(1000);
+        LOG('✅ Textarea gotowa – start');
+        runCycle();
+    })();
+})();
